@@ -28,6 +28,21 @@ export default function VersionEditor({
     onEditorRef.current({
       insertHTML: (html) => {
         editor.core.focus();
+        const range = editor.core.getRange().cloneRange();
+        range.collapse(false);
+        const endElement =
+          range.endContainer.nodeType === Node.ELEMENT_NODE
+            ? (range.endContainer as Element)
+            : range.endContainer.parentElement;
+        const link = endElement?.closest('a');
+        if (link) range.setStartAfter(link);
+        range.collapse(true);
+        editor.core.setRange(
+          range.startContainer,
+          range.startOffset,
+          range.startContainer,
+          range.startOffset,
+        );
         editor.insertHTML(html);
       },
     });

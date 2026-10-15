@@ -1,9 +1,10 @@
+import { Toaster } from 'react-hot-toast';
 import { useEffect } from 'react';
 import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router-dom';
-import CampaignsPage from './CampaignsPage';
-import CampaignPage from './CampaignPage';
-import ComposerPage from './ComposerPage';
-import { campaignStore } from './campaignStore';
+import CampaignsPage from './Email/CampaignsPage';
+import CampaignPage from './Email/CampaignPage';
+import ComposerPage from './Email/ComposerPage';
+import { campaignStore } from './mocks/campaignStore';
 export default function App() {
   useEffect(() => {
     const timer = window.setInterval(() => campaignStore.advance(), 1000);
@@ -40,6 +41,7 @@ export default function App() {
             element={<Navigate to="/admin/distribution" replace />}
           />
         </Routes>
+        <Toaster />
       </div>
     </BrowserRouter>
   );

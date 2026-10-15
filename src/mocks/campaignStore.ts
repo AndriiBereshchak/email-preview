@@ -32,6 +32,7 @@ export interface LaunchInput {
   defaultLocale: LetterLocale;
   expectedRecipients: number;
   everyoneConfirmed: boolean;
+  skipUnengaged?: boolean;
 }
 
 export interface Campaign {
@@ -42,6 +43,8 @@ export interface Campaign {
   phase: 'sending' | 'done' | 'cancelled';
   createdAt: string;
   expectedRecipients: number;
+  skipUnengaged: boolean;
+  skipped: number;
   defaultLocale: LetterLocale;
   letters: LetterDraft[];
   audience: { filters: LaunchInput['filters']; everyone: boolean };
@@ -113,8 +116,13 @@ export function createCampaignStore() {
         throw new Error('Проверьте все языковые версии письма');
       if (audience.everyone && !input.everyoneConfirmed)
         throw new Error('Подтвердите отправку всей аудитории');
+      const sendingAudience = countAudience(
+        input.target,
+        input.filters,
+        input.skipUnengaged ?? false,
+      );
       const versions = versionReach(
-        audience.byLanguage,
+        sendingAudience.byLanguage,
         input.letters.map((letter) => letter.locale),
         input.defaultLocale,
       ).map((row) => ({
@@ -128,9 +136,11 @@ export function createCampaignStore() {
         subject: input.letters.find(
           (letter) => letter.locale === input.defaultLocale,
         )!.subject,
-        phase: 'sending',
+        phase: sendingAudience.count ? 'sending' : 'done',
         createdAt: new Date().toISOString(),
         expectedRecipients: input.expectedRecipients,
+        skipUnengaged: input.skipUnengaged ?? false,
+        skipped: sendingAudience.skipped,
         defaultLocale: input.defaultLocale,
         letters: structuredClone(input.letters),
         audience: {

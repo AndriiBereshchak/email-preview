@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { EMPTY_TRADER_FILTERS } from '../utils/audienceModel';
+import {
+  EMPTY_TRADER_FILTERS,
+  EMPTY_PARTNER_FILTERS,
+  countAudience,
+} from '../utils/audienceModel';
 import {
   campaignStore,
   createCampaignStore,
@@ -165,5 +169,62 @@ describe('campaign fixtures', () => {
         expect.objectContaining({ target: 'PARTNER', phase: 'cancelled' }),
       ]),
     );
+  });
+});
+
+describe('local email engagement preference', () => {
+  it.each(['TRADER', 'PARTNER'] as const)(
+    'excludes unengaged %s recipients only when requested',
+    (target) => {
+      const filters =
+        target === 'TRADER' ? EMPTY_TRADER_FILTERS : EMPTY_PARTNER_FILTERS;
+      const audience = countAudience(target, filters);
+      const store = createCampaignStore();
+      const input = {
+        ...makeInput(),
+        target,
+        filters,
+        expectedRecipients: audience.count,
+      };
+      store.start(input);
+      store.start({ ...input, key: 'skip-unengaged', skipUnengaged: true });
+      const [skipping, all] = store.getSnapshot();
+      expect(all.numbers.total).toBe(audience.count);
+      expect(all.skipped).toBe(0);
+      expect(skipping.skipUnengaged).toBe(true);
+      expect(skipping.skipped).toBeGreaterThan(0);
+      expect(skipping.expectedRecipients).toBe(audience.count);
+      expect(skipping.numbers.total + skipping.skipped).toBe(audience.count);
+      expect(
+        skipping.versions.reduce(
+          (sum, version) => sum + version.numbers.total,
+          0,
+        ),
+      ).toBe(skipping.numbers.total);
+      for (let tick = 0; tick < 30; tick++) store.advance();
+      const done = store
+        .getSnapshot()
+        .find((campaign) => campaign.key === 'skip-unengaged')!;
+      expect(done.numbers.sent + done.skipped).toBe(audience.count);
+    },
+  );
+
+  it('completes an empty queue when every matching recipient is skipped', () => {
+    const filters = { ...EMPTY_PARTNER_FILTERS, countryCodes: ['UA'] };
+    const store = createCampaignStore();
+    const count = countAudience('PARTNER', filters).count;
+    expect(count).toBeGreaterThan(0);
+    store.start({
+      ...makeInput(),
+      target: 'PARTNER',
+      filters,
+      expectedRecipients: count,
+      skipUnengaged: true,
+    });
+    const campaign = store.getSnapshot()[0];
+    expect(campaign.phase).toBe('done');
+    expect(campaign.skipped).toBe(count);
+    expect(campaign.numbers.total).toBe(0);
+    expect(campaign.numbers.sent).toBe(0);
   });
 });

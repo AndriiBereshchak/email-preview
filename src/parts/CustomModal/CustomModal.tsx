@@ -5,6 +5,7 @@ export default function CustomModal({
   title,
   children,
   hideClose,
+  maxWidth,
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -24,6 +25,7 @@ export default function CustomModal({
     <dialog
       ref={ref}
       className="campaign-modal"
+      style={{ maxWidth }}
       aria-labelledby={id}
       onCancel={(event) => {
         event.preventDefault();

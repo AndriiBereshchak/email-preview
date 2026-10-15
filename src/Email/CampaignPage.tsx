@@ -275,6 +275,12 @@ const CampaignPage = () => {
               <dt>Поставлено в локальную очередь</dt>
               <dd>{formatCount(n.total)}</dd>
             </div>
+            {data.skipUnengaged && (
+              <div>
+                <dt>Пропущено неактивных</dt>
+                <dd>{formatCount(data.skipped)}</dd>
+              </div>
+            )}
             {n && n.cancelled > 0 && (
               <div>
                 <dt>Не отправлено после остановки</dt>

@@ -1,46 +1,46 @@
-import AudienceStep from './Composer/AudienceStep';
-import SummaryAside from './Composer/SummaryAside';
+import { useRef, useState } from 'react';
+import { toast } from 'react-hot-toast';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   countAudience,
-  EMPTY_TRADER_FILTERS,
   EMPTY_PARTNER_FILTERS,
+  EMPTY_TRADER_FILTERS,
   filtersSummary,
+  formatCount,
+  languagesWord,
   partnerFiltersProblem,
+  targetLabel,
   traderFiltersProblem,
   versionReach,
-  targetLabel,
-  formatCount,
   type CampaignTarget,
-  type TraderFilterState,
   type PartnerFilterState,
+  type TraderFilterState,
 } from '../utils/audienceModel';
-import { languagesWord } from '../utils/copy';
-import { useRef, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import ConfirmLaunch from './Composer/ConfirmLaunch';
-import { campaignStore } from '../mocks/campaignStore';
-import LetterStep from './Composer/LetterStep';
-import LetterPreview from './LetterPreview';
 import {
-  cx,
+  cx as clsx,
   draftProblem,
   emptyDraft,
-  languageName,
-  renderLocalPreview,
+  previewKey,
   type LetterDraft,
   type LetterLocale,
 } from '../utils/localModel';
+import { campaignStore } from '../mocks/campaignStore';
+import AudienceStep from './Composer/AudienceStep';
+import ConfirmLaunch from './Composer/ConfirmLaunch';
+import LetterStep from './Composer/LetterStep';
+import ReviewStep, { type PreviewState } from './Composer/ReviewStep';
+import SummaryAside from './Composer/SummaryAside';
 import e from './emailCampaign.module.css';
 
-export default function ComposerPage() {
+type Step = 1 | 2 | 3;
+
+const ComposerPage = () => {
   const navigate = useNavigate();
-  const [params] = useSearchParams();
-  const launchKey = useRef(crypto.randomUUID());
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [launchError, setLaunchError] = useState('');
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [searchParams] = useSearchParams();
+
+  const [step, setStep] = useState<Step>(1);
   const [target, setTarget] = useState<CampaignTarget>(
-    params.get('audience') === 'partners' ? 'PARTNER' : 'TRADER',
+    searchParams.get('audience') === 'partners' ? 'PARTNER' : 'TRADER',
   );
   const [traderFilters, setTraderFilters] =
     useState<TraderFilterState>(EMPTY_TRADER_FILTERS);
@@ -50,12 +50,10 @@ export default function ComposerPage() {
   const [drafts, setDrafts] = useState<LetterDraft[]>([emptyDraft('ru')]);
   const [defaultLocale, setDefaultLocale] = useState<LetterLocale>('ru');
   const [activeLocale, setActiveLocale] = useState<LetterLocale>('ru');
-  const [reviewed, setReviewed] = useState<Record<string, string>>({});
-  const problems = Object.fromEntries(
-    drafts.map((draft) => [draft.locale, draftProblem(draft)]),
-  );
-  const active =
-    drafts.find((draft) => draft.locale === activeLocale) ?? drafts[0]!;
+  const [skipUnengaged, setSkipUnengaged] = useState(false);
+  const [previews, setPreviews] = useState<Record<string, PreviewState>>({});
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const launchKey = useRef(crypto.randomUUID());
 
   const filters = target === 'TRADER' ? traderFilters : partnerFilters;
   const filtersProblem =
@@ -64,288 +62,244 @@ export default function ComposerPage() {
       : partnerFiltersProblem(partnerFilters);
   const audience = countAudience(target, filters);
   const count = filtersProblem ? null : audience.count;
+  const byLanguage = filtersProblem ? [] : audience.byLanguage;
+  const everyone = audience.everyone;
+  const filterLines = filtersSummary(target, filters);
   const audienceProblem =
     filtersProblem ?? (count === 0 ? 'Под эти фильтры никто не попал' : null);
   const audienceReady = count !== null && count > 0 && !audienceProblem;
-  const byLanguage = filtersProblem ? [] : audience.byLanguage;
-  const reach = versionReach(
-    byLanguage,
-    drafts.map((draft) => draft.locale),
-    defaultLocale,
+
+  const letters = drafts;
+  const locales = drafts.map((draft) => draft.locale);
+  const reach = versionReach(byLanguage, locales, defaultLocale);
+  const problems: Record<string, string | null> = Object.fromEntries(
+    drafts.map((draft) => [draft.locale, draftProblem(draft)]),
   );
-  const reviewKey = (draft: LetterDraft) => JSON.stringify([target, draft]);
+  const lettersReady = drafts.every((draft) => !problems[draft.locale]);
+  const isPreviewed = (locale: string): boolean => {
+    const letter = letters.find((item) => item.locale === locale);
+    return (
+      Boolean(letter) && previews[locale]?.key === previewKey(target, letter!)
+    );
+  };
+  const allPreviewed = letters.every((letter) => isPreviewed(letter.locale));
+
+  const launchBlocker = !audienceReady
+    ? 'Сначала настройте получателей'
+    : !lettersReady
+      ? 'Заполните все версии письма'
+      : !allPreviewed
+        ? 'Откройте предпросмотр каждой версии'
+        : null;
+
+  const updateDraft = (locale: LetterLocale, patch: Partial<LetterDraft>) =>
+    setDrafts((all) =>
+      all.map((draft) =>
+        draft.locale === locale ? { ...draft, ...patch } : draft,
+      ),
+    );
 
   const addDraft = (locale: LetterLocale) => {
-    setDrafts((all) =>
-      all.some((draft) => draft.locale === locale)
-        ? all
-        : [
-            ...all,
-            {
-              ...emptyDraft(locale),
-              html:
-                all.find((draft) => draft.locale === defaultLocale)?.html ?? '',
-            },
-          ],
-    );
+    setDrafts((all) => {
+      if (all.some((draft) => draft.locale === locale)) return all;
+      const main = all.find((draft) => draft.locale === defaultLocale);
+      return [...all, { ...emptyDraft(locale), html: main?.html ?? '' }];
+    });
     setActiveLocale(locale);
   };
+
   const removeDraft = (locale: LetterLocale) => {
     const rest = drafts.filter((draft) => draft.locale !== locale);
-    if (!rest.length) return;
+    if (rest.length === 0) return;
     setDrafts(rest);
     if (defaultLocale === locale) setDefaultLocale(rest[0]!.locale);
     if (activeLocale === locale) setActiveLocale(rest[0]!.locale);
   };
-  const review = () => {
-    if (!audienceReady || drafts.some((draft) => draftProblem(draft))) return;
-    setReviewed((current) => ({
-      ...current,
-      [active.locale]: reviewKey(active),
-    }));
-    setStep(3);
+
+  const handleLaunch = (sendToEveryone: boolean) => {
+    if (launchBlocker || count === null) {
+      toast.error(launchBlocker ?? 'Проверьте число получателей ещё раз');
+      setConfirmOpen(false);
+      return;
+    }
+    try {
+      const id = campaignStore.start({
+        key: launchKey.current,
+        target,
+        filters,
+        letters,
+        defaultLocale,
+        skipUnengaged,
+        expectedRecipients: count,
+        everyoneConfirmed: sendToEveryone,
+      });
+      setConfirmOpen(false);
+      toast.success('Рассылка запущена в локальном режиме');
+      void navigate(`/admin/distribution/campaign/${id}`);
+    } catch (err) {
+      setConfirmOpen(false);
+      toast.error(
+        err instanceof Error ? err.message : 'Не удалось запустить рассылку',
+      );
+    }
   };
 
+  const steps: Array<{
+    n: Step;
+    title: string;
+    detail: string;
+    done: boolean;
+    available: boolean;
+  }> = [
+    {
+      n: 1,
+      title: 'Кому',
+      detail:
+        count !== null
+          ? `${targetLabel(target)} · до ${formatCount(count)}`
+          : targetLabel(target),
+      done: audienceReady,
+      available: true,
+    },
+    {
+      n: 2,
+      title: 'Письмо',
+      detail: `${drafts.length} ${languagesWord(drafts.length)}${lettersReady ? '' : ' · не заполнено'}`,
+      done: lettersReady,
+      available: audienceReady,
+    },
+    {
+      n: 3,
+      title: 'Проверка и отправка',
+      detail: launchBlocker ? 'предпросмотр и тест' : 'готово к запуску',
+      done: false,
+      available: audienceReady && lettersReady,
+    },
+  ];
+
   return (
-    <>
-      <div className={e.page}>
-        <header className={e.pageHead}>
-          <div>
-            <Link to="/admin/distribution" className={e.back}>
-              ← Все рассылки
-            </Link>
-            <h2 className={e.pageTitle}>Новая рассылка</h2>
-          </div>
-        </header>
-        <div className={e.composer}>
-          <div className={e.main}>
-            <ol className={e.stepper}>
-              {[
-                {
-                  n: 1,
-                  title: 'Кому',
-                  detail:
-                    count !== null
-                      ? `${targetLabel(target)} · до ${formatCount(count)}`
-                      : targetLabel(target),
-                },
-                {
-                  n: 2,
-                  title: 'Письмо',
-                  detail: `${drafts.length} ${languagesWord(drafts.length)}${drafts.some((draft) => draftProblem(draft)) ? ' · не заполнено' : ''}`,
-                },
-                {
-                  n: 3,
-                  title: 'Проверка и отправка',
-                  detail: 'предпросмотр и тест',
-                },
-              ].map((item) => (
-                <li key={item.n}>
-                  <button
-                    type="button"
-                    className={cx(
-                      e.stepButton,
-                      step === item.n && e.stepCurrent,
-                    )}
-                    disabled={
-                      (item.n !== 1 && !audienceReady) ||
-                      (item.n === 3 &&
-                        drafts.some((draft) => draftProblem(draft)))
-                    }
-                    aria-current={step === item.n ? 'step' : undefined}
-                    onClick={() => {
-                      if (item.n === 1) setStep(1);
-                      else if (item.n === 2) setStep(2);
-                      else review();
-                    }}
-                  >
-                    <span className={e.stepNum}>{item.n}</span>
-                    <span className={e.stepText}>
-                      <span className={e.stepTitle}>{item.title}</span>
-                      <span className={e.stepDetail}>{item.detail}</span>
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ol>
-            {step === 1 && (
-              <AudienceStep
-                target={target}
-                onTarget={setTarget}
-                traderFilters={traderFilters}
-                onTraderFilters={setTraderFilters}
-                partnerFilters={partnerFilters}
-                onPartnerFilters={setPartnerFilters}
-                count={count}
-                problem={audienceProblem}
-                onNext={() => setStep(2)}
-              />
-            )}
-            <div hidden={step !== 2}>
-              <LetterStep
-                drafts={drafts}
-                activeLocale={activeLocale}
-                defaultLocale={defaultLocale}
-                byLanguage={byLanguage}
-                reach={reach}
-                problems={problems}
-                onActive={setActiveLocale}
-                onChange={(locale, patch) =>
-                  setDrafts((all) =>
-                    all.map((draft) =>
-                      draft.locale === locale ? { ...draft, ...patch } : draft,
-                    ),
-                  )
-                }
-                onAdd={addDraft}
-                onRemove={removeDraft}
-                onMakeDefault={setDefaultLocale}
-                onBack={() => setStep(1)}
-                onNext={review}
-              />
-            </div>
-            {step === 3 && (
-              <section className={e.card} aria-labelledby="review-title">
-                <div className={e.cardHead}>
-                  <h3 id="review-title" className={e.cardTitle}>
-                    Проверка и отправка
-                  </h3>
-                </div>
-                {drafts.length > 1 && (
-                  <div
-                    className={e.versions}
-                    role="tablist"
-                    aria-label="Версии письма"
-                  >
-                    {drafts.map((draft) => (
-                      <button
-                        type="button"
-                        key={draft.locale}
-                        role="tab"
-                        aria-selected={draft.locale === activeLocale}
-                        className={cx(
-                          e.version,
-                          draft.locale === activeLocale && e.versionActive,
-                        )}
-                        onClick={() => {
-                          setActiveLocale(draft.locale);
-                          setReviewed((current) => ({
-                            ...current,
-                            [draft.locale]: reviewKey(draft),
-                          }));
-                        }}
-                      >
-                        {languageName(draft.locale)}
-                        {draft.locale === defaultLocale && (
-                          <span className={e.badge}>основная</span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                <LetterPreview
-                  preview={renderLocalPreview(active)}
-                  stale={false}
-                />
-                {launchError && (
-                  <p className={e.alert} role="alert">
-                    {launchError}
-                  </p>
-                )}
-                <div className={e.stepFooter}>
-                  <button
-                    type="button"
-                    className={cx(e.btn, e.btnGhost)}
-                    onClick={() => setStep(2)}
-                  >
-                    Назад
-                  </button>
-                  <div className={e.footerEnd}>
-                    <button
-                      type="button"
-                      className={cx(e.btn, e.btnPrimary)}
-                      disabled={
-                        !audienceReady ||
-                        drafts.some(
-                          (draft) =>
-                            draftProblem(draft) ||
-                            reviewed[draft.locale] !== reviewKey(draft),
-                        )
-                      }
-                      onClick={() => {
-                        setLaunchError('');
-                        setConfirmOpen(true);
-                      }}
-                    >
-                      Запустить рассылку
-                    </button>
-                  </div>
-                </div>
-              </section>
-            )}
-          </div>
-          <SummaryAside
-            target={target}
-            count={count}
-            everyone={audience.everyone}
-            problem={audienceProblem}
-            filterLines={filtersSummary(target, filters)}
-            byLanguage={byLanguage}
-            drafts={drafts}
-            defaultLocale={defaultLocale}
-            problems={problems}
-            isPreviewed={(locale) => {
-              const draft = drafts.find((item) => item.locale === locale);
-              return Boolean(draft && reviewed[locale] === reviewKey(draft));
-            }}
-          />
+    <div className={e.page}>
+      <header className={e.pageHead}>
+        <div>
+          <Link to="/admin/distribution" className={e.back}>
+            ← Все рассылки
+          </Link>
+          <h2 className={e.pageTitle}>Новая рассылка</h2>
         </div>
+      </header>
+
+      <div className={e.composer}>
+        <div className={e.main}>
+          <ol className={e.stepper}>
+            {steps.map((item) => (
+              <li key={item.n}>
+                <button
+                  type="button"
+                  className={clsx(
+                    e.stepButton,
+                    step === item.n && e.stepCurrent,
+                    item.done && step !== item.n && e.stepDone,
+                  )}
+                  disabled={!item.available}
+                  aria-current={step === item.n ? 'step' : undefined}
+                  onClick={() => setStep(item.n)}
+                >
+                  <span className={e.stepNum}>
+                    {item.done && step !== item.n ? '✓' : item.n}
+                  </span>
+                  <span className={e.stepText}>
+                    <span className={e.stepTitle}>{item.title}</span>
+                    <span className={e.stepDetail}>{item.detail}</span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ol>
+
+          {step === 1 && (
+            <AudienceStep
+              target={target}
+              onTarget={setTarget}
+              traderFilters={traderFilters}
+              onTraderFilters={setTraderFilters}
+              partnerFilters={partnerFilters}
+              onPartnerFilters={setPartnerFilters}
+              count={count}
+              problem={audienceProblem}
+              onNext={() => setStep(2)}
+            />
+          )}
+
+          <div hidden={step !== 2}>
+            <LetterStep
+              drafts={drafts}
+              activeLocale={activeLocale}
+              defaultLocale={defaultLocale}
+              byLanguage={byLanguage}
+              reach={reach}
+              problems={problems}
+              onActive={setActiveLocale}
+              onChange={updateDraft}
+              onAdd={addDraft}
+              onRemove={removeDraft}
+              onMakeDefault={setDefaultLocale}
+              onBack={() => setStep(1)}
+              onNext={() => setStep(3)}
+            />
+          </div>
+
+          {step === 3 && (
+            <ReviewStep
+              target={target}
+              count={count}
+              letters={letters}
+              defaultLocale={defaultLocale}
+              activeLocale={activeLocale}
+              onActive={setActiveLocale}
+              previews={previews}
+              onPreviewed={(locale, state) =>
+                setPreviews((all) => ({ ...all, [locale]: state }))
+              }
+              skipUnengaged={skipUnengaged}
+              onSkipUnengaged={setSkipUnengaged}
+              launchBlocker={launchBlocker}
+              launching={false}
+              onBack={() => setStep(2)}
+              onLaunch={() => setConfirmOpen(true)}
+            />
+          )}
+        </div>
+
+        <SummaryAside
+          target={target}
+          count={count}
+          everyone={everyone}
+          problem={audienceProblem}
+          filterLines={filterLines}
+          byLanguage={byLanguage}
+          drafts={drafts}
+          defaultLocale={defaultLocale}
+          problems={problems}
+          isPreviewed={isPreviewed}
+        />
       </div>
+
       <ConfirmLaunch
         isOpen={confirmOpen}
         busy={false}
         onClose={() => setConfirmOpen(false)}
+        onConfirm={handleLaunch}
         target={target}
         count={count ?? 0}
-        everyone={audience.everyone}
+        everyone={everyone}
         reach={reach}
-        letters={drafts}
+        letters={letters}
         defaultLocale={defaultLocale}
-        filterLines={filtersSummary(target, filters)}
-        onConfirm={(everyoneConfirmed) => {
-          if (
-            !audienceReady ||
-            drafts.some(
-              (draft) =>
-                draftProblem(draft) ||
-                reviewed[draft.locale] !== reviewKey(draft),
-            )
-          ) {
-            setConfirmOpen(false);
-            setLaunchError('Проверьте аудиторию и все версии письма');
-            return;
-          }
-          try {
-            const id = campaignStore.start({
-              key: launchKey.current,
-              target,
-              filters,
-              letters: drafts,
-              defaultLocale,
-              expectedRecipients: count!,
-              everyoneConfirmed,
-            });
-            navigate(`/admin/distribution/campaign/${id}`);
-          } catch (error) {
-            setConfirmOpen(false);
-            setLaunchError(
-              error instanceof Error
-                ? error.message
-                : 'Не удалось запустить рассылку',
-            );
-          }
-        }}
+        filterLines={filterLines}
+        skipUnengaged={skipUnengaged}
       />
-    </>
+    </div>
   );
-}
+};
+
+export default ComposerPage;

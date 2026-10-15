@@ -144,6 +144,7 @@ const traders = Array.from({ length: 30 }, (_, i) => ({
   country: ['UA', 'PL', 'GB'][i % 3]!,
   lang: ['ru', 'uk', 'en'][Math.floor(i / 3) % 3]!,
   active: i % 5 !== 0,
+  emailUnengaged: i % 4 === 0,
   deposit: i % 2 === 0,
   partnerId: i % 3 === 0 ? null : i % 2 ? 101 : 102,
   account: i % 2 ? 'REAL' : 'DEMO',
@@ -156,6 +157,7 @@ const partners = Array.from({ length: 12 }, (_, i) => ({
   country: ['UA', 'PL', 'GB'][i % 3]!,
   lang: ['ru', 'uk', 'en'][i % 3]!,
   active: i % 4 !== 0,
+  emailUnengaged: i % 3 === 0,
   status: i % 4 === 0 ? 'INACTIVE' : 'ACTIVE',
   plan: i % 2 ? 'CPA' : 'REVSHARE',
   sub: i % 2 === 0,
@@ -197,21 +199,27 @@ const matchingPartners = (f: PartnerFilterState) =>
       (!f.balanceFrom || row.balance >= Number(f.balanceFrom)) &&
       inRange(row.registered, f.registeredFrom, f.registeredTo),
   );
+
 export function countAudience(
   target: CampaignTarget,
   filters: TraderFilterState | PartnerFilterState,
+  skipUnengaged = false,
 ) {
-  const rows =
+  const matched =
     target === 'TRADER'
       ? matchingTraders(filters as TraderFilterState)
       : matchingPartners(filters as PartnerFilterState);
+  const rows = skipUnengaged
+    ? matched.filter((row) => !row.emailUnengaged)
+    : matched;
   const baseline =
     target === 'TRADER'
       ? matchingTraders(EMPTY_TRADER_FILTERS)
       : matchingPartners(EMPTY_PARTNER_FILTERS);
-  const ids = new Set(rows.map((row) => row.id));
+  const ids = new Set(matched.map((row) => row.id));
   return {
     count: rows.length,
+    skipped: matched.length - rows.length,
     everyone: baseline.every((row) => ids.has(row.id)),
     byLanguage: LETTER_LANGUAGES.map(({ value: locale }) => ({
       locale,

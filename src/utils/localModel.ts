@@ -24,6 +24,7 @@ export interface LetterPreviewResult {
   html: string;
   text: string;
   blocks: number;
+  notes: string[];
 }
 
 export const LETTER_LANGUAGES = [
@@ -78,6 +79,10 @@ export function renderLocalPreview(draft: LetterDraft): LetterPreviewResult {
     subject: draft.subject,
     text: parsed.body.textContent?.trim() ?? '',
     blocks,
+    notes: [],
     html: `<!doctype html><html lang="${draft.locale}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: https:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><style>body{margin:0;padding:24px;font:16px/1.6 Arial,sans-serif;color:#20252b;overflow-wrap:anywhere}img{max-width:100%;height:auto}a{color:#2e7a55}table{max-width:100%}</style></head><body><div style="display:none;max-height:0;overflow:hidden">${escapeHtml(draft.preheader)}</div>${draft.html}</body></html>`,
   };
 }
+
+export const previewKey = (target: string, letter: LetterDraft) =>
+  JSON.stringify([target, letter.locale, letter.subject, letter.preheader, letter.html]);

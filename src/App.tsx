@@ -1,3 +1,6 @@
+import AudienceStep from './AudienceStep';
+import SummaryAside from './SummaryAside';
+import { countAudience, EMPTY_TRADER_FILTERS, EMPTY_PARTNER_FILTERS, filtersSummary, partnerFiltersProblem, traderFiltersProblem, versionReach, targetLabel, formatCount, type CampaignTarget, type TraderFilterState, type PartnerFilterState } from './audienceModel';
 import { languagesWord } from './copy';
 import { useState } from 'react';
 import LetterStep from './LetterStep';
@@ -14,7 +17,10 @@ import {
 import e from './emailCampaign.module.css';
 
 export default function App() {
-  const [step, setStep] = useState<2 | 3>(2);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [target, setTarget] = useState<CampaignTarget>('TRADER');
+  const [traderFilters, setTraderFilters] = useState<TraderFilterState>(EMPTY_TRADER_FILTERS);
+  const [partnerFilters, setPartnerFilters] = useState<PartnerFilterState>(EMPTY_PARTNER_FILTERS);
   const [drafts, setDrafts] = useState<LetterDraft[]>([emptyDraft('ru')]);
   const [defaultLocale, setDefaultLocale] = useState<LetterLocale>('ru');
   const [activeLocale, setActiveLocale] = useState<LetterLocale>('ru');
@@ -24,6 +30,16 @@ export default function App() {
   );
   const active =
     drafts.find((draft) => draft.locale === activeLocale) ?? drafts[0]!;
+
+  const filters = target === 'TRADER' ? traderFilters : partnerFilters;
+  const filtersProblem = target === 'TRADER' ? traderFiltersProblem(traderFilters) : partnerFiltersProblem(partnerFilters);
+  const audience = countAudience(target, filters);
+  const count = filtersProblem ? null : audience.count;
+  const audienceProblem = filtersProblem ?? (count === 0 ? 'Под эти фильтры никто не попал' : null);
+  const audienceReady = count !== null && count > 0 && !audienceProblem;
+  const byLanguage = filtersProblem ? [] : audience.byLanguage;
+  const reach = versionReach(byLanguage, drafts.map(draft => draft.locale), defaultLocale);
+  const reviewKey = (draft: LetterDraft) => JSON.stringify([target, draft]);
 
   const addDraft = (locale: LetterLocale) => {
     setDrafts((all) =>
@@ -48,10 +64,10 @@ export default function App() {
     if (activeLocale === locale) setActiveLocale(rest[0]!.locale);
   };
   const review = () => {
-    if (drafts.some((draft) => draftProblem(draft))) return;
+    if (!audienceReady || drafts.some((draft) => draftProblem(draft))) return;
     setReviewed((current) => ({
       ...current,
-      [active.locale]: JSON.stringify(active),
+      [active.locale]: reviewKey(active),
     }));
     setStep(3);
   };
@@ -81,7 +97,7 @@ export default function App() {
           <div className={e.main}>
             <ol className={e.stepper}>
               {[
-                { n: 1, title: 'Кому', detail: 'Трейдеры' },
+                { n: 1, title: 'Кому', detail: count !== null ? `${targetLabel(target)} · до ${formatCount(count)}` : targetLabel(target) },
                 {
                   n: 2,
                   title: 'Письмо',
@@ -101,12 +117,12 @@ export default function App() {
                       step === item.n && e.stepCurrent,
                     )}
                     disabled={
-                      item.n === 1 ||
+                      (item.n !== 1 && !audienceReady) ||
                       (item.n === 3 &&
                         drafts.some((draft) => draftProblem(draft)))
                     }
                     aria-current={step === item.n ? 'step' : undefined}
-                    onClick={() => (item.n === 2 ? setStep(2) : review())}
+                    onClick={() => { if (item.n === 1) setStep(1); else if (item.n === 2) setStep(2); else review(); }}
                   >
                     <span className={e.stepNum}>{item.n}</span>
                     <span className={e.stepText}>
@@ -117,13 +133,19 @@ export default function App() {
                 </li>
               ))}
             </ol>
+            {step === 1 && <AudienceStep
+              target={target} onTarget={setTarget}
+              traderFilters={traderFilters} onTraderFilters={setTraderFilters}
+              partnerFilters={partnerFilters} onPartnerFilters={setPartnerFilters}
+              count={count} problem={audienceProblem} onNext={() => setStep(2)}
+            />}
             <div hidden={step !== 2}>
               <LetterStep
                 drafts={drafts}
                 activeLocale={activeLocale}
                 defaultLocale={defaultLocale}
-                byLanguage={[]}
-                reach={[]}
+                byLanguage={byLanguage}
+                reach={reach}
                 problems={problems}
                 onActive={setActiveLocale}
                 onChange={(locale, patch) =>
@@ -136,7 +158,7 @@ export default function App() {
                 onAdd={addDraft}
                 onRemove={removeDraft}
                 onMakeDefault={setDefaultLocale}
-                onBack={() => {}}
+                onBack={() => setStep(1)}
                 onNext={review}
               />
             </div>
@@ -167,7 +189,7 @@ export default function App() {
                           setActiveLocale(draft.locale);
                           setReviewed((current) => ({
                             ...current,
-                            [draft.locale]: JSON.stringify(draft),
+                            [draft.locale]: reviewKey(draft),
                           }));
                         }}
                       >
@@ -204,34 +226,12 @@ export default function App() {
               </section>
             )}
           </div>
-          <aside className={e.aside} aria-label="Сводка рассылки">
-            <div className={e.asideBlock}>
-              <span className={e.asideLabel}>Версии письма</span>
-              <ul className={e.checklist}>
-                {drafts.map((draft) => {
-                  const checked =
-                    reviewed[draft.locale] === JSON.stringify(draft);
-                  return (
-                    <li
-                      key={draft.locale}
-                      className={
-                        !problems[draft.locale] && checked
-                          ? e.checkOk
-                          : e.checkTodo
-                      }
-                    >
-                      {languageName(draft.locale)}
-                      {draft.locale === defaultLocale
-                        ? ' (основная)'
-                        : ''} —{' '}
-                      {problems[draft.locale] ??
-                        (checked ? 'проверена' : 'нужен предпросмотр')}
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          </aside>
+          <SummaryAside
+            target={target} count={count} everyone={audience.everyone}
+            problem={audienceProblem} filterLines={filtersSummary(target, filters)}
+            byLanguage={byLanguage} drafts={drafts} defaultLocale={defaultLocale}
+            problems={problems} isPreviewed={locale => { const draft = drafts.find(item => item.locale === locale); return Boolean(draft && reviewed[locale] === reviewKey(draft)); }}
+          />
         </div>
       </div>
     </div>

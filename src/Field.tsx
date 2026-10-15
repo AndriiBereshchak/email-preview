@@ -1,9 +1,5 @@
-import type { InputHTMLAttributes, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import e from './emailCampaign.module.css';
-
-export const CustomInput = (props: InputHTMLAttributes<HTMLInputElement>) => (
-  <input className="custom-input" {...props} />
-);
 
 export const Field = ({
   label,

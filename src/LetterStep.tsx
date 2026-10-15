@@ -1,7 +1,8 @@
 import { copy } from './copy'
 import { useEffect, useRef, useState } from 'react'
 import { cx as clsx, toast, LETTER_LANGUAGES, formatCount, isLetterLocale, languageName, letterImageHtml, uncoveredLanguages, type LetterLocale, type LetterDraft, type EmailImage, type VersionReach } from './localModel'
-import { CustomInput, Field } from './Fields'
+import { CustomInput } from './CustomInput';
+import { Field } from './Field';
 import VersionEditor, { type EditorHandle } from './EmailEditor'
 import EmailImages from './EmailImages'
 import e from './emailCampaign.module.css'
@@ -272,7 +273,6 @@ const LetterStep = (props: Props) => {
         <button
           type="button"
           className={clsx(e.btn, e.btnGhost)}
-          disabled
           onClick={props.onBack}>
           Назад
         </button>

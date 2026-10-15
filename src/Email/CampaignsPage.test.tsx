@@ -1,20 +1,9 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, within } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
-import * as campaignHooks from './useCampaigns';
-import { campaignStore } from '../mocks/campaignStore';
 import CampaignsPage from './CampaignsPage';
 
-const fixtures = campaignStore.getSnapshot().map((campaign) => ({
-  ...campaign,
-  createdAt: new Date(
-    2026,
-    9,
-    campaign.target === 'TRADER' ? 1 : 10,
-    12,
-  ).toISOString(),
-}));
 const show = () =>
   render(
     <MemoryRouter>
@@ -28,11 +17,9 @@ const headings = (container: HTMLElement) =>
 
 beforeEach(() => {
   localStorage.clear();
-  vi.spyOn(campaignHooks, 'useCampaigns').mockReturnValue(fixtures);
 });
 afterEach(() => {
   cleanup();
-  vi.restoreAllMocks();
 });
 
 describe('local campaign list controls', () => {

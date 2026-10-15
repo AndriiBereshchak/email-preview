@@ -5,7 +5,7 @@ import { TableViewsSlot } from '../parts/TableViews/TableViewsSlot';
 import { TableColumnsContext } from '../parts/TableViews/ColumnsRow';
 import { useTableColumns } from '../parts/TableViews/useTableColumns';
 import { EMPTY_PERIOD, matchesPeriod } from '../utils/campaignDates';
-import { useCampaigns } from './useCampaigns';
+import { CAMPAIGNS } from '../mocks/campaigns';
 import { cx } from '../utils/localModel';
 import CampaignRow from './CampaignRow';
 import { campaignTitles } from './campaignTitles';
@@ -29,7 +29,7 @@ export default function CampaignsPage() {
   const visibleTitles = visibleKeys.map(
     (key) => campaignTitles.find((title) => title.key === key)!,
   );
-  const campaigns = useCampaigns().filter(
+  const campaigns = CAMPAIGNS.filter(
     (item) =>
       (target === 'ALL' || item.target === target) &&
       matchesPeriod(item.createdAt, period),
@@ -40,8 +40,8 @@ export default function CampaignsPage() {
         <div>
           <h2 className={e.pageTitle}>Email-рассылки</h2>
           <p className={e.pageLead}>
-            Локальные тестовые кампании. Отправка и статистика имитируются;
-            после перезагрузки изменения сбрасываются.
+            Демонстрационные кампании и статистика — статические данные. Бекенд
+            не подключён, письма не отправляются.
           </p>
         </div>
         <Link
@@ -111,7 +111,7 @@ export default function CampaignsPage() {
         почтовых сервисов загружают его сами, поэтому доля открытий бывает
         завышена. Клики, отписки, отказы и жалобы — точные.
         <br />
-        Сейчас статистика имитируется на тестовых данных, письма не
+        Сейчас показаны статические демонстрационные данные, письма не
         отправляются. Описание выше относится к работе с реальным почтовым
         сервисом.
       </p>

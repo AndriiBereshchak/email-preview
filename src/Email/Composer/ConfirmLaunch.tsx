@@ -19,7 +19,6 @@ interface Props {
   isOpen: boolean;
   busy: boolean;
   onClose: () => void;
-  onConfirm: (sendToEveryone: boolean) => void;
   target: CampaignTarget;
   count: number;
   everyone: boolean;
@@ -56,16 +55,13 @@ const ConfirmLaunch = (props: Props) => {
             {formatCount(props.count)}{' '}
             {recipientsWord(props.target, props.count)}
           </strong>
-          . Это локальная имитация: настоящие письма не отправляются.
+          . Это демо: бекенд не подключён, письма не отправляются.
         </p>
 
         {props.everyone && (
           <p className={e.warning}>
-            Фильтры не сужают аудиторию — письмо получат все{' '}
-            {props.target === 'TRADER'
-              ? 'трейдеры'
-              : 'партнёры с выбранным статусом'}
-            . Если нужна часть из них, вернитесь к шагу «Кому».
+            В демонстрационных данных выбрана вся аудитория. Реальный состав
+            получателей определяется сервером.
           </p>
         )}
 
@@ -107,15 +103,16 @@ const ConfirmLaunch = (props: Props) => {
         <ul className={e.confirmList}>
           <li>
             В подключённом почтовом сервисе сначала загружаются все адреса,
-            затем начинается отправка. Сейчас очередь и отправка имитируются
-            локально.
+            затем начинается отправка. В демо этот этап не выполняется.
           </li>
           <li>
             В почтовом сервисе отписавшимся и адресам из стоп-листа письмо не
             уйдёт. В локальном режиме стоп-лист не подключён.
           </li>
           {props.skipUnengaged && (
-            <li>Тем, кто полгода не открывал наши письма, не отправим.</li>
+            <li>
+              Настройка пропуска неактивных получателей применяется на сервере.
+            </li>
           )}
         </ul>
 
@@ -143,6 +140,9 @@ const ConfirmLaunch = (props: Props) => {
           </label>
         )}
 
+        <p className={e.footerNote}>
+          Бекенд не подключён: запуск и отправка недоступны.
+        </p>
         <div className={e.confirmActions}>
           <button
             type="button"
@@ -155,10 +155,8 @@ const ConfirmLaunch = (props: Props) => {
           <button
             type="button"
             className={clsx(e.btn, e.btnPrimary)}
-            disabled={
-              !checked || (props.everyone && !everyoneConfirmed) || props.busy
-            }
-            onClick={() => props.onConfirm(props.everyone && everyoneConfirmed)}
+            disabled
+            title="Бекенд не подключён"
           >
             {props.busy
               ? 'Запускаем…'

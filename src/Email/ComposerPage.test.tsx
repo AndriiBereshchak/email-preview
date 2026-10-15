@@ -18,7 +18,7 @@ import {
 } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import ComposerPage from './ComposerPage';
-import { campaignStore } from '../mocks/campaignStore';
+import { CAMPAIGNS } from '../mocks/campaigns';
 import * as localModel from '../utils/localModel';
 
 vi.mock('./Composer/VersionEditor', () => ({
@@ -106,7 +106,7 @@ function addUkrainian(page: ReturnType<typeof setup>) {
 const launchButton = (page: ReturnType<typeof setup>) =>
   page.getByRole('button', { name: 'Запустить рассылку' }) as HTMLButtonElement;
 
-describe('checks before launching a local campaign', () => {
+describe('composer demo checks', () => {
   it('requires successful previews for all versions and rechecks edits and audience changes', async () => {
     const page = setup();
     addUkrainian(page);
@@ -153,8 +153,8 @@ describe('checks before launching a local campaign', () => {
     expect(launchButton(page).disabled).toBe(true);
   });
 
-  it('preserves the preference, conditionally explains it and requires both confirmations', async () => {
-    const start = vi.spyOn(campaignStore, 'start').mockReturnValue(999);
+  it('preserves the preference and keeps sending unavailable after confirmation', async () => {
+    const before = JSON.stringify(CAMPAIGNS);
     const page = setup();
     fireEvent.click(page.getByRole('button', { name: 'Далее: проверка' }));
     await page.findByText('Просмотрено версий: 1 из 1');
@@ -167,7 +167,7 @@ describe('checks before launching a local campaign', () => {
     let dialog = within(page.getByRole('dialog'));
     expect(
       dialog.getByText(
-        'Тем, кто полгода не открывал наши письма, не отправим.',
+        'Настройка пропуска неактивных получателей применяется на сервере.',
       ),
     ).toBeTruthy();
     const send = dialog.getByRole('button', {
@@ -182,7 +182,7 @@ describe('checks before launching a local campaign', () => {
     dialog = within(page.getByRole('dialog'));
     expect(
       dialog.queryByText(
-        'Тем, кто полгода не открывал наши письма, не отправим.',
+        'Настройка пропуска неактивных получателей применяется на сервере.',
       ),
     ).toBeNull();
     expect(
@@ -198,14 +198,29 @@ describe('checks before launching a local campaign', () => {
       dialog.getByRole('checkbox', { name: /Да, отправить всем/ }),
     );
     fireEvent.click(dialog.getByRole('button', { name: /Отправить до/ }));
-    expect(start).toHaveBeenCalledWith(
-      expect.objectContaining({
-        skipUnengaged: true,
-        everyoneConfirmed: true,
-        expectedRecipients: 24,
-      }),
+    expect(
+      (
+        dialog.getByRole('button', {
+          name: /Отправить до/,
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+    expect(
+      dialog.getByText('Бекенд не подключён: запуск и отправка недоступны.'),
+    ).toBeTruthy();
+    expect(page.queryByText('Кампания открыта')).toBeNull();
+    expect(JSON.stringify(CAMPAIGNS)).toBe(before);
+  });
+
+  it('keeps audience mock counts fixed when filters change', () => {
+    const page = setup();
+    fireEvent.click(page.getByRole('button', { name: /Кому.*Трейдеры/ }));
+    fireEvent.click(page.getByRole('checkbox', { name: /Только активные/ }));
+    const summary = within(
+      page.getByRole('complementary', { name: 'Сводка рассылки' }),
     );
-    expect(page.getByText('Кампания открыта')).toBeTruthy();
+    expect(summary.getByText('до 24')).toBeTruthy();
+    expect(page.getByText(/не пересчитываются по фильтрам/)).toBeTruthy();
   });
 
   it('does not approve a preview that failed to render', async () => {

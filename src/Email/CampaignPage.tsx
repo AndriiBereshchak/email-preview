@@ -1,8 +1,6 @@
 import { useState } from 'react';
-import { toast } from 'react-hot-toast';
 import { Link, useParams } from 'react-router-dom';
-import { useCampaigns } from './useCampaigns';
-import { campaignStore } from '../mocks/campaignStore';
+import { CAMPAIGNS } from '../mocks/campaigns';
 import { formatDateTime, percent, phaseView } from '../utils/campaignModel';
 import { filtersSummary, targetLabel } from '../utils/audienceModel';
 import {
@@ -40,7 +38,7 @@ const SentLetter = ({ letter }: { letter: LetterDraft }) => (
 
 const CampaignPage = () => {
   const { id } = useParams();
-  const data = useCampaigns().find((item) => String(item.id) === id);
+  const data = CAMPAIGNS.find((item) => String(item.id) === id);
   const [locale, setLocale] = useState<string | null>(null);
 
   if (!data) {
@@ -61,17 +59,6 @@ const CampaignPage = () => {
     data.letters.find(
       (item) => item.locale === (locale ?? data.defaultLocale),
     ) ?? data.letters[0];
-  const stop = () => {
-    if (
-      !window.confirm(
-        'Остановить рассылку? Письма, которые уже ушли, не отзываются.',
-      )
-    )
-      return;
-    campaignStore.stop(data.id);
-    toast.success('Рассылка остановлена');
-  };
-
   return (
     <div className={e.page}>
       <header className={e.detailHead}>
@@ -98,7 +85,8 @@ const CampaignPage = () => {
           <button
             type="button"
             className={clsx(e.btn, e.btnDanger)}
-            onClick={stop}
+            disabled
+            title="Бекенд не подключён"
           >
             Остановить рассылку
           </button>
@@ -159,9 +147,9 @@ const CampaignPage = () => {
       </section>
       <p className={e.footnote}>
         Доставлено и отказы — доля от отправленных, остальное — от доставленных.
-        Открытия считаются по пикселю в письме и бывают завышены. Локальная
-        имитация: письма не отправляются, показатели рассчитаны на тестовых
-        данных.
+        Открытия считаются по пикселю в письме и бывают завышены. Сейчас
+        показаны статические демонстрационные данные. Бекенд не подключён,
+        письма не отправляются.
       </p>
 
       <section className={e.panel}>
@@ -272,7 +260,7 @@ const CampaignPage = () => {
               </dd>
             </div>
             <div>
-              <dt>Поставлено в локальную очередь</dt>
+              <dt>Передано почтовому сервису</dt>
               <dd>{formatCount(n.total)}</dd>
             </div>
             {data.skipUnengaged && (

@@ -1,4 +1,4 @@
-import type { Campaign, Numbers } from '../mocks/campaignStore';
+import type { Campaign, Numbers } from '../mocks/campaigns';
 export const formatDateTime = (date: string) =>
   new Date(date).toLocaleString('ru-RU');
 export const percent = (value: number, total: number) =>

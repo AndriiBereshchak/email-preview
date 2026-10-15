@@ -1,8 +1,6 @@
-import { useRef, useState } from 'react';
-import { toast } from 'react-hot-toast';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
-  countAudience,
   EMPTY_PARTNER_FILTERS,
   EMPTY_TRADER_FILTERS,
   filtersSummary,
@@ -24,7 +22,7 @@ import {
   type LetterDraft,
   type LetterLocale,
 } from '../utils/localModel';
-import { campaignStore } from '../mocks/campaignStore';
+import { DEMO_AUDIENCE } from '../mocks/audience';
 import AudienceStep from './Composer/AudienceStep';
 import ConfirmLaunch from './Composer/ConfirmLaunch';
 import LetterStep from './Composer/LetterStep';
@@ -35,7 +33,6 @@ import e from './emailCampaign.module.css';
 type Step = 1 | 2 | 3;
 
 const ComposerPage = () => {
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   const [step, setStep] = useState<Step>(1);
@@ -53,14 +50,13 @@ const ComposerPage = () => {
   const [skipUnengaged, setSkipUnengaged] = useState(false);
   const [previews, setPreviews] = useState<Record<string, PreviewState>>({});
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const launchKey = useRef(crypto.randomUUID());
 
   const filters = target === 'TRADER' ? traderFilters : partnerFilters;
   const filtersProblem =
     target === 'TRADER'
       ? traderFiltersProblem(traderFilters)
       : partnerFiltersProblem(partnerFilters);
-  const audience = countAudience(target, filters);
+  const audience = DEMO_AUDIENCE[target];
   const count = filtersProblem ? null : audience.count;
   const byLanguage = filtersProblem ? [] : audience.byLanguage;
   const everyone = audience.everyone;
@@ -114,34 +110,6 @@ const ComposerPage = () => {
     setDrafts(rest);
     if (defaultLocale === locale) setDefaultLocale(rest[0]!.locale);
     if (activeLocale === locale) setActiveLocale(rest[0]!.locale);
-  };
-
-  const handleLaunch = (sendToEveryone: boolean) => {
-    if (launchBlocker || count === null) {
-      toast.error(launchBlocker ?? 'Проверьте число получателей ещё раз');
-      setConfirmOpen(false);
-      return;
-    }
-    try {
-      const id = campaignStore.start({
-        key: launchKey.current,
-        target,
-        filters,
-        letters,
-        defaultLocale,
-        skipUnengaged,
-        expectedRecipients: count,
-        everyoneConfirmed: sendToEveryone,
-      });
-      setConfirmOpen(false);
-      toast.success('Рассылка запущена в локальном режиме');
-      void navigate(`/admin/distribution/campaign/${id}`);
-    } catch (err) {
-      setConfirmOpen(false);
-      toast.error(
-        err instanceof Error ? err.message : 'Не удалось запустить рассылку',
-      );
-    }
   };
 
   const steps: Array<{
@@ -288,7 +256,6 @@ const ComposerPage = () => {
         isOpen={confirmOpen}
         busy={false}
         onClose={() => setConfirmOpen(false)}
-        onConfirm={handleLaunch}
         target={target}
         count={count ?? 0}
         everyone={everyone}

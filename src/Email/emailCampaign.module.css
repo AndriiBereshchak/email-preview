@@ -53,6 +53,7 @@
 }
 
 .toolbarEnd {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1360,7 +1361,7 @@ a.subject:hover {
 
 .previewStage {
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   padding: 18px;
   border-radius: 12px;
   background: #e9edf3;
@@ -1369,6 +1370,7 @@ a.subject:hover {
 
 .previewFrame {
   display: block;
+  margin-inline: auto;
   flex-shrink: 0;
   height: 720px;
   border: 0;
@@ -1590,4 +1592,10 @@ a.subject:hover {
 .letterEditor :global(.sun-editor-editable) a:not([data-link-edit-id]) {
   color: #2e7a55;
   text-decoration: underline;
+}
+
+@media (max-width: 600px) {
+  .toolbarEnd {
+    width: 100%;
+  }
 }

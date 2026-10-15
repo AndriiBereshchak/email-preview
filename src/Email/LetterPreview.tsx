@@ -37,6 +37,20 @@ const LetterPreview = ({ preview, stale }: Props) => {
               type="button"
               role="tab"
               aria-selected={view === option.value}
+              tabIndex={view === option.value ? 0 : -1}
+              onKeyDown={(event) => {
+                if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')
+                  return;
+                event.preventDefault();
+                const direction = event.key === 'ArrowRight' ? 1 : -1;
+                const index = VIEWS.findIndex((item) => item.value === view);
+                const nextIndex =
+                  (index + direction + VIEWS.length) % VIEWS.length;
+                setView(VIEWS[nextIndex].value);
+                event.currentTarget.parentElement
+                  ?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+                  [nextIndex]?.focus();
+              }}
               className={clsx(
                 e.segment,
                 view === option.value && e.segmentActive,

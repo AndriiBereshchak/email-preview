@@ -100,3 +100,15 @@
   color: #bd3434;
   font-size: 13px;
 }
+
+@media (max-width: 600px) {
+  .control {
+    position: static;
+  }
+
+  .popover {
+    left: 0;
+    right: auto;
+    max-width: 100%;
+  }
+}

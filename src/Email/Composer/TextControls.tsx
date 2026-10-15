@@ -252,6 +252,24 @@ export default function TextControls({
           ),
         }}
       >
+        <div className={e.textAlignButtons}>
+          {(['link', 'button'] as const).map((kind) => (
+            <button
+              type="button"
+              key={kind}
+              onClick={() => {
+                if (savedRange.current)
+                  root.dispatchEvent(
+                    new CustomEvent('email-link-edit', {
+                      detail: { kind, range: savedRange.current.cloneRange() },
+                    }),
+                  );
+              }}
+            >
+              {kind === 'link' ? 'Ссылка' : 'Кнопка'}
+            </button>
+          ))}
+        </div>
         <strong>
           {inline
             ? 'Выделенный текст'

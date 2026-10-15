@@ -8,6 +8,7 @@ import {
   type EmailAppearance,
 } from '../../utils/appearanceModel';
 import type { CSSProperties } from 'react';
+import LinkControls from './LinkControls';
 import ImageControls from './ImageControls';
 import TextControls from './TextControls';
 import e from '../emailCampaign.module.css';
@@ -21,6 +22,7 @@ interface Props {
   onEditor?: (editor: EditorHandle) => void;
   mode?: 'content' | 'layout' | 'decoration';
   label?: string;
+  toolbarTarget?: HTMLElement | null;
   appearance?: EmailAppearance;
 }
 
@@ -31,6 +33,7 @@ export default function VersionEditor({
   mode = 'content',
   appearance = DEFAULT_APPEARANCE,
   label,
+  toolbarTarget,
 }: Props) {
   const [instance, setInstance] = useState<SunEditorCore | null>(null);
   const syncing = useRef(false);
@@ -104,6 +107,14 @@ export default function VersionEditor({
       }
       style={{ '--email-link-color': appearance.linkColor } as CSSProperties}
     >
+      {instance && mode !== 'content' && (
+        <LinkControls
+          editor={instance}
+          onChange={handleChange}
+          linkColor={appearance.linkColor}
+          toolbarTarget={toolbarTarget}
+        />
+      )}
       <SunEditor
         readOnly={mode === 'layout'}
         hideToolbar={mode !== 'content'}
@@ -117,6 +128,7 @@ export default function VersionEditor({
         height={mode === 'content' ? '390px' : 'auto'}
         setOptions={{
           attributesWhitelist: {
+            a: 'style|data-email-button|data-button-size',
             span: 'style',
             p: 'style',
             h1: 'style',

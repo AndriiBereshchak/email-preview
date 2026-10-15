@@ -23,6 +23,9 @@ interface Props {
   onNext: () => void;
 }
 export default function DesignStep(props: Props) {
+  const [toolbarTarget, setToolbarTarget] = useState<HTMLDivElement | null>(
+    null,
+  );
   const [view, setView] = useState<'desktop' | 'mobile'>('desktop');
   const active =
     props.drafts.find((draft) => draft.locale === props.activeLocale) ??
@@ -82,6 +85,7 @@ export default function DesignStep(props: Props) {
               </button>
             ))}
           </div>
+          <div ref={setToolbarTarget} />
           <div
             className={e.designStage}
             role="region"
@@ -104,6 +108,7 @@ export default function DesignStep(props: Props) {
                 key={active.locale}
                 initialHtml={active.html}
                 mode="layout"
+                toolbarTarget={toolbarTarget}
                 appearance={props.appearance}
                 onChange={(html) => props.onChange(active.locale, html)}
               />

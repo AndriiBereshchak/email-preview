@@ -1977,3 +1977,10 @@ a.subject:hover {
   user-select: text;
   -webkit-user-select: text;
 }
+
+.linkTools {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 6px 0;
+}

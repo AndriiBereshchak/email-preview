@@ -19,7 +19,8 @@ interface Props {
   initialHtml: string;
   onChange: (html: string) => void;
   onEditor?: (editor: EditorHandle) => void;
-  mode?: 'content' | 'layout';
+  mode?: 'content' | 'layout' | 'decoration';
+  label?: string;
   appearance?: EmailAppearance;
 }
 
@@ -29,6 +30,7 @@ export default function VersionEditor({
   onEditor,
   mode = 'content',
   appearance = DEFAULT_APPEARANCE,
+  label,
 }: Props) {
   const [instance, setInstance] = useState<SunEditorCore | null>(null);
   const syncing = useRef(false);
@@ -73,10 +75,12 @@ export default function VersionEditor({
   }, []);
 
   useEffect(() => {
-    if (instance)
-      (instance.core.context.element.wysiwyg as HTMLElement).contentEditable =
-        mode === 'layout' ? 'false' : 'true';
-  }, [instance, mode]);
+    if (instance) {
+      const root = instance.core.context.element.wysiwyg as HTMLElement;
+      root.contentEditable = mode === 'layout' ? 'false' : 'true';
+      if (label) root.setAttribute('aria-label', label);
+    }
+  }, [instance, mode, label]);
 
   useEffect(() => {
     if (!instance || initialHtml === lastKnownHtml.current) return;
@@ -92,22 +96,25 @@ export default function VersionEditor({
   return (
     <div
       className={
-        mode === 'layout'
-          ? `${e.letterEditor} ${e.layoutEditor}`
-          : `${e.letterEditor} ${e.contentEditor}`
+        mode === 'decoration'
+          ? `${e.letterEditor} ${e.decorationEditor}`
+          : mode === 'layout'
+            ? `${e.letterEditor} ${e.layoutEditor}`
+            : `${e.letterEditor} ${e.contentEditor}`
       }
       style={{ '--email-link-color': appearance.linkColor } as CSSProperties}
     >
       <SunEditor
         readOnly={mode === 'layout'}
-        hideToolbar={mode === 'layout'}
+        hideToolbar={mode !== 'content'}
+        placeholder={label}
         setDefaultStyle={
-          mode === 'layout' ? appearanceBodyCss(appearance) : undefined
+          mode !== 'content' ? appearanceBodyCss(appearance) : undefined
         }
         getSunEditorInstance={seedEditor}
         onChange={handleChange}
         onBlur={(_event, contents) => handleChange(contents)}
-        height="390px"
+        height={mode === 'content' ? '390px' : 'auto'}
         setOptions={{
           attributesWhitelist: {
             span: 'style',
@@ -137,9 +144,11 @@ export default function VersionEditor({
           showPathLabel: false,
         }}
       />
-      {instance && mode === 'layout' && (
+      {instance && mode !== 'content' && (
         <>
-          <ImageControls editor={instance} onChange={handleChange} />
+          {mode === 'layout' && (
+            <ImageControls editor={instance} onChange={handleChange} />
+          )}
           <TextControls editor={instance} onChange={handleChange} />
         </>
       )}

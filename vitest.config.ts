@@ -4,6 +4,6 @@ import viteConfig from './vite.config';
 export default mergeConfig(
   viteConfig,
   defineConfig({
-    test: { css: { include: [/suneditor/] } },
+    test: { environment: 'jsdom', css: { include: [/suneditor/] } },
   }),
 );

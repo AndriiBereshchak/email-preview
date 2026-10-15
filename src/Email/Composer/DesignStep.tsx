@@ -7,6 +7,8 @@ import {
 } from '../../utils/localModel';
 import type { EmailAppearance } from '../../utils/appearanceModel';
 import AppearanceSettings from './AppearanceSettings';
+import LetterFooter from './LetterFooter';
+import LetterHeader from './LetterHeader';
 import VersionEditor from './VersionEditor';
 import e from '../emailCampaign.module.css';
 interface Props {
@@ -82,6 +84,9 @@ export default function DesignStep(props: Props) {
           </div>
           <div
             className={e.designStage}
+            role="region"
+            aria-label="Макет письма"
+            tabIndex={0}
             style={{ backgroundColor: props.appearance.pageBackground }}
           >
             <div
@@ -91,12 +96,20 @@ export default function DesignStep(props: Props) {
                 margin: '0 auto',
               }}
             >
+              <LetterHeader
+                appearance={props.appearance}
+                onChange={props.onAppearance}
+              />
               <VersionEditor
                 key={active.locale}
                 initialHtml={active.html}
                 mode="layout"
                 appearance={props.appearance}
                 onChange={(html) => props.onChange(active.locale, html)}
+              />
+              <LetterFooter
+                appearance={props.appearance}
+                onChange={props.onAppearance}
               />
             </div>
           </div>

@@ -3,6 +3,8 @@ import {
   EMAIL_FONTS,
   type EmailAppearance,
 } from '../../utils/appearanceModel';
+import FooterSettings from './FooterSettings';
+import HeaderSettings from './HeaderSettings';
 import AppearanceColor from './AppearanceColor';
 import AppearanceNumber from './AppearanceNumber';
 import e from '../emailCampaign.module.css';
@@ -19,6 +21,8 @@ export default function AppearanceSettings({
   ) => onChange({ ...value, [key]: next });
   return (
     <div className={e.appearanceSettings}>
+      <HeaderSettings value={value} onChange={onChange} />
+      <FooterSettings value={value} onChange={onChange} />
       <fieldset>
         <legend>Фон и контейнер</legend>
         <AppearanceColor

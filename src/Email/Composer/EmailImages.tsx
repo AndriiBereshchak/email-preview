@@ -4,6 +4,11 @@ import { useRef, useState } from 'react';
 import { cx, type EmailImage } from '../../utils/localModel';
 import e from '../emailCampaign.module.css';
 
+const sizeOf = (bytes: number): string =>
+  bytes >= 1024 * 1024
+    ? `${(bytes / 1024 / 1024).toFixed(1)} МБ`
+    : `${Math.max(1, Math.round(bytes / 1024))} КБ`;
+
 export default function EmailImages({
   onInsert,
 }: {
@@ -128,8 +133,7 @@ export default function EmailImages({
                 {image.name}
               </span>
               <span className={e.meta}>
-                {image.width}×{image.height} · {(image.size / 1024).toFixed(0)}{' '}
-                КБ
+                {image.width}×{image.height} · {sizeOf(image.size)}
               </span>
               <div className={e.inlineActions}>
                 <button

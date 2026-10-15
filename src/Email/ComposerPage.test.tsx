@@ -103,6 +103,12 @@ function addUkrainian(page: ReturnType<typeof setup>) {
   });
 }
 
+function openReview(page: ReturnType<typeof setup>) {
+  const next = page.queryByRole('button', { name: 'Далее: оформление' });
+  if (next) fireEvent.click(next);
+  fireEvent.click(page.getByRole('button', { name: 'Далее: проверка' }));
+}
+
 const launchButton = (page: ReturnType<typeof setup>) =>
   page.getByRole('button', { name: 'Запустить рассылку' }) as HTMLButtonElement;
 
@@ -110,7 +116,7 @@ describe('composer demo checks', () => {
   it('requires successful previews for all versions and rechecks edits and audience changes', async () => {
     const page = setup();
     addUkrainian(page);
-    fireEvent.click(page.getByRole('button', { name: 'Далее: проверка' }));
+    openReview(page);
     await page.findByText('Просмотрено версий: 1 из 2');
     expect(launchButton(page).disabled).toBe(true);
     expect(page.getByText('Откройте предпросмотр каждой версии')).toBeTruthy();
@@ -124,6 +130,7 @@ describe('composer demo checks', () => {
     expect(page.getByRole('button', { name: /✓ Письмо/ })).toBeTruthy();
 
     fireEvent.click(review.getByRole('button', { name: 'Назад' }));
+    fireEvent.click(page.getByRole('button', { name: 'Назад: письмо' }));
     const letter = within(page.getByRole('region', { name: 'Письмо' }));
     fireEvent.click(letter.getByRole('tab', { name: /Украинский/ }));
     fireEvent.change(letter.getByRole('textbox', { name: /Прехедер/ }), {
@@ -137,7 +144,7 @@ describe('composer demo checks', () => {
     });
     // Open RU first; the edited UK must stay unreviewed until selected.
     fireEvent.click(letter.getByRole('tab', { name: /Русский/ }));
-    fireEvent.click(page.getByRole('button', { name: 'Далее: проверка' }));
+    openReview(page);
     expect(page.getByText('Просмотрено версий: 1 из 2')).toBeTruthy();
     expect(launchButton(page).disabled).toBe(true);
     review = within(page.getByRole('region', { name: 'Проверка и отправка' }));
@@ -148,7 +155,7 @@ describe('composer demo checks', () => {
     fireEvent.click(page.getByRole('button', { name: /Кому.*Трейдеры/ }));
     fireEvent.click(page.getByRole('radio', { name: /Партнёрам/ }));
     fireEvent.click(page.getByRole('button', { name: 'Далее: письмо' }));
-    fireEvent.click(page.getByRole('button', { name: 'Далее: проверка' }));
+    openReview(page);
     await page.findByText('Просмотрено версий: 1 из 2');
     expect(launchButton(page).disabled).toBe(true);
   });
@@ -156,7 +163,7 @@ describe('composer demo checks', () => {
   it('preserves the preference and keeps sending unavailable after confirmation', async () => {
     const before = JSON.stringify(CAMPAIGNS);
     const page = setup();
-    fireEvent.click(page.getByRole('button', { name: 'Далее: проверка' }));
+    openReview(page);
     await page.findByText('Просмотрено версий: 1 из 1');
     const preference = page.getByRole('checkbox', {
       name: /Не отправлять тем/,
@@ -228,7 +235,7 @@ describe('composer demo checks', () => {
       throw new Error('Не удалось собрать письмо');
     });
     const page = setup();
-    fireEvent.click(page.getByRole('button', { name: 'Далее: проверка' }));
+    openReview(page);
     expect(await page.findByRole('alert')).toBeTruthy();
     expect(page.getByText('Просмотрено версий: 0 из 1')).toBeTruthy();
     expect(launchButton(page).disabled).toBe(true);
@@ -237,14 +244,14 @@ describe('composer demo checks', () => {
         page.getByRole('region', { name: 'Проверка и отправка' }),
       ).getByRole('button', { name: 'Назад' }),
     );
-    fireEvent.click(page.getByRole('button', { name: 'Далее: проверка' }));
+    openReview(page);
     await waitFor(() => expect(launchButton(page).disabled).toBe(false));
   });
 
   it('keeps a cached successful version visible after another version fails', async () => {
     const page = setup();
     addUkrainian(page);
-    fireEvent.click(page.getByRole('button', { name: 'Далее: проверка' }));
+    openReview(page);
     await page.findByText('Просмотрено версий: 1 из 2');
     vi.spyOn(localModel, 'renderLocalPreview').mockImplementationOnce(() => {
       throw new Error('Ошибка RU');
@@ -262,12 +269,13 @@ describe('composer demo checks', () => {
 
   it('does not mark a version reviewed after leaving before its preview completes', async () => {
     const page = setup();
-    fireEvent.click(page.getByRole('button', { name: 'Далее: проверка' }));
+    openReview(page);
     fireEvent.click(
       within(
         page.getByRole('region', { name: 'Проверка и отправка' }),
       ).getByRole('button', { name: 'Назад' }),
     );
+    fireEvent.click(page.getByRole('button', { name: 'Назад: письмо' }));
     await act(async () => {
       await Promise.resolve();
     });
@@ -276,5 +284,26 @@ describe('composer demo checks', () => {
         page.getByRole('complementary', { name: 'Сводка рассылки' }),
       ).getByText(/нужен предпросмотр/),
     ).toBeTruthy();
+  });
+  it('invalidates all language previews when appearance changes', async () => {
+    const page = setup();
+    addUkrainian(page);
+    openReview(page);
+    await page.findByText('Просмотрено версий: 1 из 2');
+    fireEvent.click(
+      within(
+        page.getByRole('region', { name: 'Проверка и отправка' }),
+      ).getByRole('tab', { name: /Русский/ }),
+    );
+    await page.findByText('Просмотрено версий: 2 из 2');
+    fireEvent.click(page.getByRole('button', { name: 'Назад' }));
+    fireEvent.change(page.getByLabelText('Фон письма', { exact: true }), {
+      target: { value: '#ffeedd' },
+    });
+    openReview(page);
+    await page.findByText('Просмотрено версий: 1 из 2');
+    expect(launchButton(page).disabled).toBe(true);
+    const html = page.getByTitle('Предпросмотр письма').getAttribute('srcdoc')!;
+    expect(html).toContain('#ffeedd');
   });
 });

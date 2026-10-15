@@ -80,7 +80,9 @@ const LetterPreview = ({ preview, stale }: Props) => {
               sandbox=""
               srcDoc={preview.html}
               className={e.previewFrame}
-              style={{ width: view === 'desktop' ? 640 : 375 }}
+              style={{
+                width: view === 'desktop' ? (preview.width ?? 640) : 375,
+              }}
             />
           </div>
         )}

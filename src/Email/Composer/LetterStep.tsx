@@ -317,7 +317,7 @@ const LetterStep = (props: Props) => {
             disabled={notReady.length > 0}
             onClick={props.onNext}
           >
-            Далее: проверка
+            Далее: оформление
           </button>
         </div>
       </div>

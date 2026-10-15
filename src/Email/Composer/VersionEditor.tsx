@@ -1,7 +1,14 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import SunEditor from 'suneditor-react';
 import type SunEditorCore from 'suneditor/src/lib/core';
 import 'suneditor/dist/css/suneditor.min.css';
+import {
+  appearanceBodyCss,
+  DEFAULT_APPEARANCE,
+  type EmailAppearance,
+} from '../../utils/appearanceModel';
+import type { CSSProperties } from 'react';
+import ImageControls from './ImageControls';
 import e from '../emailCampaign.module.css';
 
 export interface EditorHandle {
@@ -10,22 +17,30 @@ export interface EditorHandle {
 interface Props {
   initialHtml: string;
   onChange: (html: string) => void;
-  onEditor: (editor: EditorHandle) => void;
+  onEditor?: (editor: EditorHandle) => void;
+  mode?: 'content' | 'layout';
+  appearance?: EmailAppearance;
 }
 
 export default function VersionEditor({
   initialHtml,
   onChange,
   onEditor,
+  mode = 'content',
+  appearance = DEFAULT_APPEARANCE,
 }: Props) {
+  const [instance, setInstance] = useState<SunEditorCore | null>(null);
+  const syncing = useRef(false);
+  const lastKnownHtml = useRef(initialHtml);
   const seed = useRef(initialHtml);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
   const onEditorRef = useRef(onEditor);
   onEditorRef.current = onEditor;
   const seedEditor = useCallback((editor: SunEditorCore) => {
+    setInstance(editor);
     if (seed.current) editor.setContents(seed.current);
-    onEditorRef.current({
+    onEditorRef.current?.({
       insertHTML: (html) => {
         editor.core.focus();
         const range = editor.core.getRange().cloneRange();
@@ -44,17 +59,50 @@ export default function VersionEditor({
           range.startOffset,
         );
         editor.insertHTML(html);
+        const contents = editor.getContents(false);
+        lastKnownHtml.current = contents;
+        onChangeRef.current(contents);
       },
     });
   }, []);
-  const handleChange = useCallback(
-    (html: string) => onChangeRef.current(html),
-    [],
-  );
+  const handleChange = useCallback((html: string) => {
+    if (syncing.current) return;
+    lastKnownHtml.current = html;
+    onChangeRef.current(html);
+  }, []);
+
+  useEffect(() => {
+    if (instance)
+      (instance.core.context.element.wysiwyg as HTMLElement).contentEditable =
+        mode === 'layout' ? 'false' : 'true';
+  }, [instance, mode]);
+
+  useEffect(() => {
+    if (!instance || initialHtml === lastKnownHtml.current) return;
+    lastKnownHtml.current = initialHtml;
+    syncing.current = true;
+    try {
+      instance.setContents(initialHtml);
+    } finally {
+      syncing.current = false;
+    }
+  }, [initialHtml, instance]);
 
   return (
-    <div className={e.letterEditor}>
+    <div
+      className={
+        mode === 'layout'
+          ? `${e.letterEditor} ${e.layoutEditor}`
+          : `${e.letterEditor} ${e.contentEditor}`
+      }
+      style={{ '--email-link-color': appearance.linkColor } as CSSProperties}
+    >
       <SunEditor
+        readOnly={mode === 'layout'}
+        hideToolbar={mode === 'layout'}
+        setDefaultStyle={
+          mode === 'layout' ? appearanceBodyCss(appearance) : undefined
+        }
         getSunEditorInstance={seedEditor}
         onChange={handleChange}
         onBlur={(_event, contents) => handleChange(contents)}
@@ -71,12 +119,16 @@ export default function VersionEditor({
           ],
           defaultStyle:
             'font-family: Arial, sans-serif; font-size: 16px; line-height: 1.6;',
+          imageResizing: false,
           imageAccept: '.png,.jpg,.jpeg,.gif,.webp',
           imageUploadSizeLimit: 15 * 1024 * 1024,
           resizingBar: false,
           showPathLabel: false,
         }}
       />
+      {instance && mode === 'layout' && (
+        <ImageControls editor={instance} onChange={handleChange} />
+      )}
     </div>
   );
 }

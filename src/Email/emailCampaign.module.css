@@ -672,7 +672,7 @@ a.subject:hover {
 
 .stepper {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
   margin: 0;
   padding: 0;
@@ -1590,7 +1590,7 @@ a.subject:hover {
 }
 
 .letterEditor :global(.sun-editor-editable) a:not([data-link-edit-id]) {
-  color: #2e7a55;
+  color: var(--email-link-color, #2e7a55);
   text-decoration: underline;
 }
 
@@ -1598,4 +1598,200 @@ a.subject:hover {
   .toolbarEnd {
     width: 100%;
   }
+}
+
+.imageDropMarker {
+  position: fixed;
+  height: 3px;
+  background: #399667;
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 10000;
+}
+
+.layoutEditor :global(.se-image-container figure) {
+  cursor: grab;
+  touch-action: none;
+}
+
+.designComposer {
+  grid-template-columns: minmax(0, 1fr);
+}
+.designColumns {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+  gap: 24px;
+}
+.designCanvas {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.designCanvas > .segmented {
+  align-self: flex-start;
+}
+.designStage {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow-x: auto;
+}
+.appearanceSettings {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.appearanceSettings fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin: 0;
+  padding: 16px;
+  min-width: 0;
+}
+.appearanceSettings legend {
+  font-size: 13px;
+  font-weight: 700;
+  padding: 0 4px;
+}
+.appearanceSettings .field {
+  margin: 0;
+}
+.appearanceColor {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.appearanceColor input[type='color'] {
+  width: 40px;
+  height: 36px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  flex-shrink: 0;
+}
+.layoutEditor :global(.sun-editor) {
+  border: 0;
+}
+.layoutEditor :global(.sun-editor-editable) {
+  min-height: 390px;
+}
+@media (max-width: 900px) {
+  .designColumns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .appearanceSettings {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 560px) {
+  .appearanceSettings {
+    display: flex;
+  }
+}
+
+.layoutEditor :global(figure) {
+  max-width: 100%;
+}
+
+.contentEditor :global(.se-controller button[data-command='revert']) {
+  display: none;
+}
+
+.imageSelection {
+  position: fixed;
+  border: 2px solid #399667;
+  pointer-events: none;
+  z-index: 100;
+  box-sizing: border-box;
+}
+.imageSelection[hidden],
+.imageContextMenu[hidden] {
+  display: none;
+}
+.imageResizeCorner {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 2px solid #399667;
+  background: #fff;
+  border-radius: 2px;
+  pointer-events: auto;
+  touch-action: none;
+}
+.imageResizeCorner[data-handle='nw'] {
+  left: -7px;
+  top: -7px;
+  cursor: nwse-resize;
+}
+.imageResizeCorner[data-handle='ne'] {
+  right: -7px;
+  top: -7px;
+  cursor: nesw-resize;
+}
+.imageResizeCorner[data-handle='sw'] {
+  left: -7px;
+  bottom: -7px;
+  cursor: nesw-resize;
+}
+.imageResizeCorner[data-handle='se'] {
+  right: -7px;
+  bottom: -7px;
+  cursor: nwse-resize;
+}
+.imageSpacingHandle {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 2px 6px;
+  border: 1px solid #399667;
+  border-radius: 4px;
+  background: #fff;
+  color: #286b47;
+  font:
+    11px/1.4 Arial,
+    sans-serif;
+  white-space: nowrap;
+  cursor: ns-resize;
+  pointer-events: auto;
+  touch-action: none;
+}
+.imageSpacingHandle[data-handle='top'] {
+  top: -22px;
+}
+.imageSpacingHandle[data-handle='bottom'] {
+  bottom: -22px;
+}
+.imageContextMenu {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  z-index: 110;
+  min-width: 150px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 4px 16px #17212b20;
+}
+.imageContextMenu button {
+  border: 0;
+  padding: 8px 12px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: var(--text);
+}
+.imageContextMenu button:hover {
+  background: #edf7f1;
+}
+.imageContextMenu button:disabled {
+  opacity: 0.4;
+  cursor: default;
 }

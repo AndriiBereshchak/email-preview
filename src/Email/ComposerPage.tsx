@@ -1,3 +1,8 @@
+import DesignStep from './Composer/DesignStep';
+import {
+  DEFAULT_APPEARANCE,
+  type EmailAppearance,
+} from '../utils/appearanceModel';
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
@@ -30,7 +35,7 @@ import ReviewStep, { type PreviewState } from './Composer/ReviewStep';
 import SummaryAside from './Composer/SummaryAside';
 import e from './emailCampaign.module.css';
 
-type Step = 1 | 2 | 3;
+type Step = 1 | 2 | 3 | 4;
 
 const ComposerPage = () => {
   const [searchParams] = useSearchParams();
@@ -47,6 +52,9 @@ const ComposerPage = () => {
   const [drafts, setDrafts] = useState<LetterDraft[]>([emptyDraft('ru')]);
   const [defaultLocale, setDefaultLocale] = useState<LetterLocale>('ru');
   const [activeLocale, setActiveLocale] = useState<LetterLocale>('ru');
+  const [appearance, setAppearance] = useState<EmailAppearance>({
+    ...DEFAULT_APPEARANCE,
+  });
   const [skipUnengaged, setSkipUnengaged] = useState(false);
   const [previews, setPreviews] = useState<Record<string, PreviewState>>({});
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -75,7 +83,8 @@ const ComposerPage = () => {
   const isPreviewed = (locale: string): boolean => {
     const letter = letters.find((item) => item.locale === locale);
     return (
-      Boolean(letter) && previews[locale]?.key === previewKey(target, letter!)
+      Boolean(letter) &&
+      previews[locale]?.key === previewKey(target, letter!, appearance)
     );
   };
   const allPreviewed = letters.every((letter) => isPreviewed(letter.locale));
@@ -138,6 +147,13 @@ const ComposerPage = () => {
     },
     {
       n: 3,
+      title: 'Оформление',
+      detail: 'стиль и расположение',
+      done: false,
+      available: audienceReady && lettersReady,
+    },
+    {
+      n: 4,
       title: 'Проверка и отправка',
       detail: launchBlocker ? 'предпросмотр и тест' : 'готово к запуску',
       done: false,
@@ -156,7 +172,7 @@ const ComposerPage = () => {
         </div>
       </header>
 
-      <div className={e.composer}>
+      <div className={clsx(e.composer, step === 3 && e.designComposer)}>
         <div className={e.main}>
           <ol className={e.stepper}>
             {steps.map((item) => (
@@ -216,11 +232,26 @@ const ComposerPage = () => {
             />
           </div>
 
-          {step === 3 && (
+          <div hidden={step !== 3}>
+            <DesignStep
+              drafts={drafts}
+              activeLocale={activeLocale}
+              defaultLocale={defaultLocale}
+              appearance={appearance}
+              onActive={setActiveLocale}
+              onAppearance={setAppearance}
+              onChange={(locale, html) => updateDraft(locale, { html })}
+              onBack={() => setStep(2)}
+              onNext={() => setStep(4)}
+            />
+          </div>
+
+          {step === 4 && (
             <ReviewStep
               target={target}
               count={count}
               letters={letters}
+              appearance={appearance}
               defaultLocale={defaultLocale}
               activeLocale={activeLocale}
               onActive={setActiveLocale}
@@ -232,24 +263,26 @@ const ComposerPage = () => {
               onSkipUnengaged={setSkipUnengaged}
               launchBlocker={launchBlocker}
               launching={false}
-              onBack={() => setStep(2)}
+              onBack={() => setStep(3)}
               onLaunch={() => setConfirmOpen(true)}
             />
           )}
         </div>
 
-        <SummaryAside
-          target={target}
-          count={count}
-          everyone={everyone}
-          problem={audienceProblem}
-          filterLines={filterLines}
-          byLanguage={byLanguage}
-          drafts={drafts}
-          defaultLocale={defaultLocale}
-          problems={problems}
-          isPreviewed={isPreviewed}
-        />
+        {step !== 3 && (
+          <SummaryAside
+            target={target}
+            count={count}
+            everyone={everyone}
+            problem={audienceProblem}
+            filterLines={filterLines}
+            byLanguage={byLanguage}
+            drafts={drafts}
+            defaultLocale={defaultLocale}
+            problems={problems}
+            isPreviewed={isPreviewed}
+          />
+        )}
       </div>
 
       <ConfirmLaunch

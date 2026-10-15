@@ -1,3 +1,4 @@
+import type { EmailAppearance } from '../../utils/appearanceModel';
 import { useEffect, useRef, useState } from 'react';
 import {
   cx as clsx,
@@ -21,6 +22,7 @@ export interface PreviewState {
 
 interface Props {
   target: CampaignTarget;
+  appearance: EmailAppearance;
   count: number | null;
   letters: CampaignLetter[];
   defaultLocale: LetterLocale;
@@ -47,13 +49,14 @@ const ReviewStep = (props: Props) => {
   const letter =
     props.letters.find((item) => item.locale === props.activeLocale) ??
     props.letters[0]!;
-  const key = previewKey(props.target, letter);
+  const key = previewKey(props.target, letter, props.appearance);
   const preview = props.previews[letter.locale];
   const fresh = preview?.key === key;
   const failure = failedPreview?.key === key ? failedPreview.message : null;
   const previewed = props.letters.filter(
     (item) =>
-      props.previews[item.locale]?.key === previewKey(props.target, item),
+      props.previews[item.locale]?.key ===
+      previewKey(props.target, item, props.appearance),
   ).length;
 
   useEffect(() => {
@@ -61,7 +64,7 @@ const ReviewStep = (props: Props) => {
     let cancelled = false;
     setFailedPreview(null);
     Promise.resolve()
-      .then(() => renderLocalPreview(letter))
+      .then(() => renderLocalPreview(letter, props.appearance))
       .then((data) => {
         if (!cancelled) onPreviewed.current(letter.locale, { key, data });
       })
@@ -77,7 +80,7 @@ const ReviewStep = (props: Props) => {
     return () => {
       cancelled = true;
     };
-  }, [key, fresh, letter]);
+  }, [key, fresh, letter, props.appearance]);
 
   return (
     <section className={e.card} aria-labelledby="review-title">
@@ -97,7 +100,7 @@ const ReviewStep = (props: Props) => {
           {props.letters.map((item) => {
             const done =
               props.previews[item.locale]?.key ===
-              previewKey(props.target, item);
+              previewKey(props.target, item, props.appearance);
             return (
               <button
                 key={item.locale}

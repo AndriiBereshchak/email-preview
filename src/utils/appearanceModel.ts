@@ -52,5 +52,5 @@ export function normalizeAppearance(
 }
 export const appearanceBodyCss = (appearance: EmailAppearance) => {
   const a = normalizeAppearance(appearance);
-  return `padding:${a.padding}px;font-family:${a.fontFamily},${a.fontFamily === 'Georgia' ? 'serif' : 'sans-serif'};font-size:${a.fontSize}px;line-height:${a.lineHeight};color:${a.textColor};background-color:${a.background};overflow-wrap:anywhere;`;
+  return `--email-content-padding:${a.padding}px;padding:${a.padding}px;font-family:${a.fontFamily},${a.fontFamily === 'Georgia' ? 'serif' : 'sans-serif'};font-size:${a.fontSize}px;line-height:${a.lineHeight};color:${a.textColor};background-color:${a.background};overflow-wrap:anywhere;`;
 };

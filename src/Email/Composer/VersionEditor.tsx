@@ -9,6 +9,7 @@ import {
 } from '../../utils/appearanceModel';
 import type { CSSProperties } from 'react';
 import ImageControls from './ImageControls';
+import TextControls from './TextControls';
 import e from '../emailCampaign.module.css';
 
 export interface EditorHandle {
@@ -108,6 +109,16 @@ export default function VersionEditor({
         onBlur={(_event, contents) => handleChange(contents)}
         height="390px"
         setOptions={{
+          attributesWhitelist: {
+            span: 'style',
+            p: 'style',
+            h1: 'style',
+            h2: 'style',
+            h3: 'style',
+            h4: 'style',
+            h5: 'style',
+            h6: 'style',
+          },
           buttonList: [
             ['undo', 'redo'],
             ['formatBlock', 'fontSize'],
@@ -127,7 +138,10 @@ export default function VersionEditor({
         }}
       />
       {instance && mode === 'layout' && (
-        <ImageControls editor={instance} onChange={handleChange} />
+        <>
+          <ImageControls editor={instance} onChange={handleChange} />
+          <TextControls editor={instance} onChange={handleChange} />
+        </>
       )}
     </div>
   );

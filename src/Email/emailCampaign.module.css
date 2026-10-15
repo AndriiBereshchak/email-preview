@@ -1795,3 +1795,101 @@ a.subject:hover {
   opacity: 0.4;
   cursor: default;
 }
+
+.textSelection {
+  position: fixed;
+  border: 1px solid #399667;
+  pointer-events: none;
+  z-index: 99;
+  box-sizing: border-box;
+}
+.textFloatingTools {
+  position: fixed;
+  z-index: 110;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  width: 340px;
+  max-width: calc(100vw - 16px);
+  box-sizing: border-box;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  box-shadow: 0 4px 16px #17212b20;
+  font:
+    12px/1.4 Arial,
+    sans-serif;
+}
+.textFloatingTools > strong {
+  width: 100%;
+}
+.textFloatingTools label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.textFloatingTools select {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+}
+.textAlignButtons {
+  display: flex;
+  gap: 2px;
+}
+.textAlignButtons button {
+  display: flex;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #fff;
+  color: inherit;
+  cursor: pointer;
+}
+.textAlignButtons button[aria-pressed='true'] {
+  background: #edf7f1;
+  border-color: #399667;
+}
+.textFloatingTools :focus-visible {
+  outline: 2px solid #399667;
+  outline-offset: 2px;
+}
+
+.textFloatingTools {
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+}
+.textFloatingTools input[type='color'] {
+  width: 30px;
+  height: 26px;
+  padding: 1px;
+  border: 1px solid var(--border);
+  background: #fff;
+}
+.textFloatingTools > button {
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.textFloatingTools :disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.layoutEditor :global(.sun-editor),
+.layoutEditor :global(.se-container),
+.layoutEditor :global(.se-wrapper),
+.layoutEditor :global(.sun-editor-editable),
+.layoutEditor :global(.sun-editor-editable *) {
+  user-select: text;
+  -webkit-user-select: text;
+}

@@ -10,7 +10,6 @@ import {
 import type { CSSProperties } from 'react';
 import LinkControls from './LinkControls';
 import ImageControls from './ImageControls';
-import TextControls from './TextControls';
 import e from '../emailCampaign.module.css';
 
 export interface EditorHandle {
@@ -161,7 +160,6 @@ export default function VersionEditor({
           {mode === 'layout' && (
             <ImageControls editor={instance} onChange={handleChange} />
           )}
-          <TextControls editor={instance} onChange={handleChange} />
         </>
       )}
     </div>

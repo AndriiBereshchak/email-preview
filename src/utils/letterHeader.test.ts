@@ -30,26 +30,18 @@ describe('letter header', () => {
     );
     expect(normalizeAppearance({}).headerEnabled).toBe(false);
   });
-  it('uses the same header in the layout and language previews without modifying the letter', () => {
+  it('omits legacy headers and footers from every language preview', () => {
     for (const locale of ['uk', 'ru'] as const) {
-      const preview = renderLocalPreview({ ...draft, locale }, appearance);
+      const preview = renderLocalPreview({ ...draft, locale }, {
+        ...appearance,
+        headerText: '<p>Old header</p>',
+        footerEnabled: true,
+        footerText: '<p>Old footer</p>',
+      });
       const doc = new DOMParser().parseFromString(preview.html, 'text/html');
-      const header = doc.querySelector<HTMLElement>('.email-header')!;
-      expect(header.outerHTML).toBe(
-        new DOMParser().parseFromString(
-          letterHeaderHtml(appearance),
-          'text/html',
-        ).body.innerHTML,
-      );
-      expect(header.style.backgroundColor).toBe('rgb(18, 52, 86)');
-      const image = header.querySelector('img')!;
-      expect(image.getAttribute('src')).toBe(logo);
-      expect(image.style.height).toBe('auto');
-      expect(image.style.maxWidth).toBe('100%');
-      expect(
-        header.closest('tr')?.nextElementSibling?.querySelector('.email-body')
-          ?.innerHTML,
-      ).toBe(draft.html);
+      expect(doc.querySelector('.email-header')).toBeNull();
+      expect(doc.querySelector('.email-footer')).toBeNull();
+      expect(doc.querySelector('.email-body')?.innerHTML).toBe(draft.html);
       expect(preview.text).toBe('Letter content');
     }
   });
@@ -93,46 +85,6 @@ describe('letter header', () => {
   });
 });
 
-it('renders formatted header text, resized logo and height, and footer in order', () => {
-  const a = {
-    ...appearance,
-    logoWidth: 240,
-    headerHeight: 280,
-    headerText:
-      '<p><span style="font-size:24px;color:#ffffff">Welcome</span></p>',
-    footerEnabled: true,
-    footerBackground: '#eeeeee',
-    footerText: '<p>Thank you</p>',
-  };
-  const preview = renderLocalPreview(draft, a);
-  const doc = new DOMParser().parseFromString(preview.html, 'text/html');
-  expect(
-    (doc.querySelector('.email-header') as HTMLElement).style.minHeight,
-  ).toBe('280px');
-  expect(
-    (doc.querySelector('.email-header img') as HTMLImageElement).width,
-  ).toBe(240);
-  expect(
-    (doc.querySelector('.email-header span') as HTMLElement).style.fontSize,
-  ).toBe('24px');
-  expect(doc.querySelector('.email-footer')!.textContent).toBe('Thank you');
-  expect(preview.text.indexOf('Welcome')).toBeLessThan(
-    preview.text.indexOf('Letter content'),
-  );
-  expect(preview.text.indexOf('Letter content')).toBeLessThan(
-    preview.text.indexOf('Thank you'),
-  );
-  expect(letterFooterHtml({ ...a, footerEnabled: false })).toBe('');
-  expect(previewKey('TRADER', draft, a)).not.toBe(
-    previewKey('TRADER', draft, appearance),
-  );
-  const hidden = renderLocalPreview(draft, {
-    ...a,
-    headerEnabled: false,
-    footerEnabled: false,
-  });
-  expect(hidden.text).toBe('Letter content');
-});
 it('bounds resize values and keeps existing content when normalizing', () => {
   const a = normalizeAppearance({
     headerHeight: -100,

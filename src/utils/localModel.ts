@@ -1,7 +1,6 @@
+import { renderEmailHtml } from './emailHtml';
 import {
   DEFAULT_APPEARANCE,
-  appearanceBodyCss,
-  backgroundImageCss,
   normalizeAppearance,
   type EmailAppearance,
 } from './appearanceModel';
@@ -58,16 +57,6 @@ export const emptyDraft = (locale: LetterLocale): LetterDraft => ({
   html: '',
 });
 
-const escapeHtml = (value: string) =>
-  value.replace(
-    /[&<>"']/g,
-    (char) =>
-      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[
-        char
-      ]!,
-  );
-export const letterImageHtml = (image: EmailImage) =>
-  `<p><img src="${escapeHtml(image.url)}" alt="${escapeHtml(image.name)}" style="max-width:100%;height:auto"></p>`;
 export const draftProblem = (draft: LetterDraft): string | null => {
   if (!draft.subject.trim()) return 'заполните тему';
   const parsed = new DOMParser().parseFromString(draft.html, 'text/html');
@@ -91,7 +80,7 @@ export function renderLocalPreview(
     subject: draft.subject,
     text: parsed.body.textContent?.trim() ?? '',
     notes: [],
-    html: `<!doctype html><html lang="${draft.locale}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: https:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><style>${editorContentsCss}body.sun-editor-editable{margin:0;padding:16px;background-color:${a.pageBackground};${backgroundImageCss(a.pageBackgroundImage)}} .email-body{${appearanceBodyCss(a)}}.email-body a:not([style*="color"]){color:${a.linkColor}}.sun-editor-editable .email-shell>tbody>tr,.sun-editor-editable .email-sheet>tbody>tr{border:0}figure{max-width:100%}img{max-width:100%;height:auto}table{max-width:100%}</style></head><body class="sun-editor-editable"><div style="display:none;max-height:0;overflow:hidden">${escapeHtml(draft.preheader)}</div><table class="email-shell" role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;table-layout:fixed!important;border:0;border-collapse:collapse"><tr><td align="center" style="padding:0;border:0"><table class="email-sheet" role="presentation" width="${a.width}" cellpadding="0" cellspacing="0" style="border:0;border-collapse:collapse;table-layout:fixed!important;width:100%;max-width:${a.width}px;background:${a.background}"><tr><td class="sun-editor-editable email-body" style="border:0;${appearanceBodyCss(a)}">${draft.html}</td></tr></table></td></tr></table></body></html>`,
+    html: renderEmailHtml(draft, a, editorContentsCss),
   };
 }
 

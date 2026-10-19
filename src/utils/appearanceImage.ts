@@ -21,3 +21,22 @@ export async function readAppearanceImage(file: File): Promise<string> {
   });
   return src;
 }
+
+export const normalizeBackgroundImage = (src: unknown): string =>
+  typeof src === 'string' &&
+  /^data:image\/(png|jpeg|gif|webp);base64,[a-z0-9+/=]+$/i.test(src)
+    ? src
+    : '';
+
+export function emailImageUrl(value = ''): string {
+  if (normalizeBackgroundImage(value)) return value;
+  if (/[\s<>"'\\]/.test(value)) return '';
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && !url.username && !url.password
+      ? value
+      : '';
+  } catch {
+    return '';
+  }
+}

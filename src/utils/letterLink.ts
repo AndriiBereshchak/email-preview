@@ -1,3 +1,4 @@
+import { appearanceColor } from './appearanceModel';
 export type LinkKind = 'link' | 'button';
 export type ButtonSize = 'small' | 'medium' | 'large';
 export interface LetterLinkValue {
@@ -64,6 +65,18 @@ export function linkValue(
       'left') as LetterLinkValue['alignment'],
   };
 }
+export function letterButtonCss(
+  value: Pick<LetterLinkValue, 'size' | 'radius' | 'background'>,
+): string {
+  const sizes = {
+    small: [14, 8, 16],
+    medium: [16, 12, 24],
+    large: [20, 16, 32],
+  };
+  const [font, vertical, horizontal] = sizes[value.size] || sizes.medium;
+  return `display:inline-block;background-color:${appearanceColor(value.background, '#2e7a55')};border-radius:${Math.max(0, Math.min(48, value.radius))}px;font-size:${font}px;padding:${vertical}px ${horizontal}px;max-width:100%;box-sizing:border-box;overflow-wrap:anywhere;line-height:1.4;`;
+}
+
 export function saveLetterLink(
   root: HTMLElement,
   value: LetterLinkValue,
@@ -119,24 +132,10 @@ export function saveLetterLink(
   if (value.kind === 'button') {
     anchor.setAttribute('data-email-button', 'true');
     anchor.setAttribute('data-button-size', value.size);
-    anchor.style.display = 'inline-block';
-    anchor.style.backgroundColor = value.background;
-    anchor.style.borderRadius = `${Math.max(0, Math.min(48, value.radius))}px`;
-    const sizes = {
-      small: [14, 8, 16],
-      medium: [16, 12, 24],
-      large: [20, 16, 32],
-    };
-    const [font, vertical, horizontal] = sizes[value.size] || sizes.medium;
-    anchor.style.fontSize = `${font}px`;
+    anchor.style.cssText += letterButtonCss(value);
     anchor
       .querySelectorAll<HTMLElement>('*')
       .forEach((child) => child.style.removeProperty('font-size'));
-    anchor.style.padding = `${vertical}px ${horizontal}px`;
-    anchor.style.maxWidth = '100%';
-    anchor.style.boxSizing = 'border-box';
-    anchor.style.overflowWrap = 'anywhere';
-    anchor.style.lineHeight = '1.4';
   }
   if (!existing) {
     if (value.kind === 'link' && range && paragraph) {

@@ -1,3 +1,4 @@
+import { normalizeBackgroundImage, emailImageUrl } from './appearanceImage';
 export const EMAIL_FONTS = ['Arial', 'Georgia', 'Verdana'] as const;
 export interface EmailAppearance {
   pageBackground: string;
@@ -25,7 +26,7 @@ export const DEFAULT_APPEARANCE: EmailAppearance = {
   fontSize: 16,
   lineHeight: 1.6,
 };
-const color = (value: string | undefined, fallback: string) =>
+export const appearanceColor = (value: string | undefined, fallback = '') =>
   value && /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
 const bounded = (
   value: number | undefined,
@@ -41,12 +42,12 @@ export function normalizeAppearance(
 ): EmailAppearance {
   const d = DEFAULT_APPEARANCE;
   return {
-    pageBackground: color(input.pageBackground, d.pageBackground),
-    background: color(input.background, d.background),
+    pageBackground: appearanceColor(input.pageBackground, d.pageBackground),
+    background: appearanceColor(input.background, d.background),
     pageBackgroundImage: normalizeBackgroundImage(input.pageBackgroundImage),
     backgroundImage: normalizeBackgroundImage(input.backgroundImage),
-    textColor: color(input.textColor, d.textColor),
-    linkColor: color(input.linkColor, d.linkColor),
+    textColor: appearanceColor(input.textColor, d.textColor),
+    linkColor: appearanceColor(input.linkColor, d.linkColor),
     width: Math.round(bounded(input.width, d.width, 320, 800)),
     padding: Math.round(bounded(input.padding, d.padding, 0, 64)),
     fontFamily: EMAIL_FONTS.includes(input.fontFamily!)
@@ -56,18 +57,15 @@ export function normalizeAppearance(
     lineHeight: bounded(input.lineHeight, d.lineHeight, 1, 2.5),
   };
 }
-export const normalizeBackgroundImage = (src: unknown): string =>
-  typeof src === 'string' &&
-  /^data:image\/(png|jpeg|gif|webp);base64,[a-z0-9+/=]+$/i.test(src)
-    ? src
-    : '';
-
-export const backgroundImageStyle = (src: string) => ({
-  backgroundImage: normalizeBackgroundImage(src) ? `url("${src}")` : 'none',
-  backgroundPosition: 'center',
-  backgroundSize: 'cover',
-  backgroundRepeat: 'no-repeat',
-});
+export const backgroundImageStyle = (src: string) => {
+  const image = emailImageUrl(src);
+  return {
+    backgroundImage: image ? `url("${image}")` : 'none',
+    backgroundPosition: 'center',
+    backgroundSize: 'cover',
+    backgroundRepeat: 'no-repeat',
+  };
+};
 
 export const backgroundImageCss = (src: string): string => {
   const style = backgroundImageStyle(src);

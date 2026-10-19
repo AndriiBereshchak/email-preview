@@ -1,3 +1,4 @@
+import { letterImageHtml } from '../../utils/emailHtml';
 import { toast } from 'react-hot-toast';
 import { copy } from '../../utils/copy';
 import { useEffect, useRef, useState } from 'react';
@@ -7,7 +8,6 @@ import {
   formatCount,
   isLetterLocale,
   languageName,
-  letterImageHtml,
   uncoveredLanguages,
   type LetterLocale,
   type LetterDraft,
@@ -97,7 +97,7 @@ const LetterStep = (props: Props) => {
       toast.error('Редактор ещё загружается — попробуйте через секунду');
       return;
     }
-    editor.insertHTML(letterImageHtml(image));
+    editor.insertHTML(`<p>${letterImageHtml(image)}</p>`);
     toast.success(
       `«${image.name}» — в версии: ${languageName(active.locale).toLowerCase()}`,
     );

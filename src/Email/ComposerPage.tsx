@@ -1,9 +1,8 @@
 import DesignStep from './Composer/DesignStep';
-import {
-  DEFAULT_APPEARANCE,
-  type EmailAppearance,
-} from '../utils/appearanceModel';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { createEmailDocument } from '../utils/emailDocument';
+import { renderEmailDocumentContent } from '../utils/renderEmailDocument';
+import type { EmailAppearance } from '../utils/appearanceModel';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   EMPTY_PARTNER_FILTERS,
@@ -22,7 +21,6 @@ import {
 import {
   cx as clsx,
   draftProblem,
-  emptyDraft,
   previewKey,
   type LetterDraft,
   type LetterLocale,
@@ -49,12 +47,22 @@ const ComposerPage = () => {
   const [partnerFilters, setPartnerFilters] = useState<PartnerFilterState>(
     EMPTY_PARTNER_FILTERS,
   );
-  const [drafts, setDrafts] = useState<LetterDraft[]>([emptyDraft('ru')]);
+  const [document, setDocument] = useState(() => createEmailDocument());
+  const drafts = useMemo<LetterDraft[]>(
+    () =>
+      Object.entries(document.versions).map(([locale, version]) => ({
+        locale: locale as LetterLocale,
+        subject: version!.subject,
+        preheader: version!.preheader,
+        html: renderEmailDocumentContent(document, locale as LetterLocale).html,
+      })),
+    [document],
+  );
   const [defaultLocale, setDefaultLocale] = useState<LetterLocale>('ru');
   const [activeLocale, setActiveLocale] = useState<LetterLocale>('ru');
-  const [appearance, setAppearance] = useState<EmailAppearance>({
-    ...DEFAULT_APPEARANCE,
-  });
+  const appearance = document.appearance;
+  const setAppearance = (value: EmailAppearance) =>
+    setDocument((current) => ({ ...current, appearance: value }));
   const [skipUnengaged, setSkipUnengaged] = useState(false);
   const [previews, setPreviews] = useState<Record<string, PreviewState>>({});
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -79,6 +87,15 @@ const ComposerPage = () => {
   const problems: Record<string, string | null> = Object.fromEntries(
     drafts.map((draft) => [draft.locale, draftProblem(draft)]),
   );
+  const subjectProblems = Object.fromEntries(
+    drafts.map((draft) => [
+      draft.locale,
+      draft.subject.trim() ? null : 'заполните тему',
+    ]),
+  );
+  const subjectsReady = drafts.every(
+    (draft) => !subjectProblems[draft.locale],
+  );
   const lettersReady = drafts.every((draft) => !problems[draft.locale]);
   const isPreviewed = (locale: string): boolean => {
     const letter = letters.find((item) => item.locale === locale);
@@ -97,28 +114,42 @@ const ComposerPage = () => {
         ? 'Откройте предпросмотр каждой версии'
         : null;
 
-  const updateDraft = (locale: LetterLocale, patch: Partial<LetterDraft>) =>
-    setDrafts((all) =>
-      all.map((draft) =>
-        draft.locale === locale ? { ...draft, ...patch } : draft,
-      ),
-    );
+  const updateDraft = (
+    locale: LetterLocale,
+    patch: Partial<Pick<LetterDraft, 'subject' | 'preheader'>>,
+  ) =>
+    setDocument((current) => ({
+      ...current,
+      versions: {
+        ...current.versions,
+        [locale]: { ...current.versions[locale]!, ...patch },
+      },
+    }));
 
   const addDraft = (locale: LetterLocale) => {
-    setDrafts((all) => {
-      if (all.some((draft) => draft.locale === locale)) return all;
-      const main = all.find((draft) => draft.locale === defaultLocale);
-      return [...all, { ...emptyDraft(locale), html: main?.html ?? '' }];
-    });
+    setDocument((current) =>
+      current.versions[locale]
+        ? current
+        : {
+            ...current,
+            versions: {
+              ...current.versions,
+              [locale]: { subject: '', preheader: '', blocks: {} },
+            },
+          },
+    );
     setActiveLocale(locale);
   };
-
   const removeDraft = (locale: LetterLocale) => {
     const rest = drafts.filter((draft) => draft.locale !== locale);
-    if (rest.length === 0) return;
-    setDrafts(rest);
-    if (defaultLocale === locale) setDefaultLocale(rest[0]!.locale);
-    if (activeLocale === locale) setActiveLocale(rest[0]!.locale);
+    if (!rest.length) return;
+    setDocument((current) => {
+      const versions = { ...current.versions };
+      delete versions[locale];
+      return { ...current, versions };
+    });
+    if (defaultLocale === locale) setDefaultLocale(rest[0].locale);
+    if (activeLocale === locale) setActiveLocale(rest[0].locale);
   };
 
   const steps: Array<{
@@ -141,8 +172,8 @@ const ComposerPage = () => {
     {
       n: 2,
       title: 'Письмо',
-      detail: `${drafts.length} ${languagesWord(drafts.length)}${lettersReady ? '' : ' · не заполнено'}`,
-      done: lettersReady,
+      detail: `${drafts.length} ${languagesWord(drafts.length)}${subjectsReady ? '' : ' · не заполнено'}`,
+      done: subjectsReady,
       available: audienceReady,
     },
     {
@@ -150,14 +181,14 @@ const ComposerPage = () => {
       title: 'Оформление',
       detail: 'стиль и расположение',
       done: false,
-      available: audienceReady && lettersReady,
+      available: audienceReady && subjectsReady,
     },
     {
       n: 4,
       title: 'Проверка и отправка',
       detail: launchBlocker ? 'предпросмотр и тест' : 'готово к запуску',
       done: false,
-      available: audienceReady && lettersReady,
+      available: audienceReady && subjectsReady,
     },
   ];
 
@@ -221,7 +252,7 @@ const ComposerPage = () => {
               defaultLocale={defaultLocale}
               byLanguage={byLanguage}
               reach={reach}
-              problems={problems}
+              problems={subjectProblems}
               onActive={setActiveLocale}
               onChange={updateDraft}
               onAdd={addDraft}
@@ -234,13 +265,12 @@ const ComposerPage = () => {
 
           <div hidden={step !== 3}>
             <DesignStep
-              drafts={drafts}
+              document={document}
               activeLocale={activeLocale}
               defaultLocale={defaultLocale}
-              appearance={appearance}
               onActive={setActiveLocale}
               onAppearance={setAppearance}
-              onChange={(locale, html) => updateDraft(locale, { html })}
+              onChange={setDocument}
               onBack={() => setStep(2)}
               onNext={() => setStep(4)}
             />
@@ -248,6 +278,7 @@ const ComposerPage = () => {
 
           {step === 4 && (
             <ReviewStep
+              document={document}
               target={target}
               count={count}
               letters={letters}
@@ -279,7 +310,7 @@ const ComposerPage = () => {
             byLanguage={byLanguage}
             drafts={drafts}
             defaultLocale={defaultLocale}
-            problems={problems}
+            problems={step === 4 ? problems : subjectProblems}
             isPreviewed={isPreviewed}
           />
         )}

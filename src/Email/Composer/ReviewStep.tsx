@@ -1,3 +1,5 @@
+import type { EmailDocument } from '../../utils/emailDocument';
+import { renderEmailDocument } from '../../utils/renderEmailDocument';
 import type { EmailAppearance } from '../../utils/appearanceModel';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -5,7 +7,6 @@ import {
   formatCount,
   languageName,
   previewKey,
-  renderLocalPreview,
   type LetterDraft as CampaignLetter,
   type LetterLocale,
   type LetterPreviewResult,
@@ -21,6 +22,7 @@ export interface PreviewState {
 }
 
 interface Props {
+  document: EmailDocument;
   target: CampaignTarget;
   appearance: EmailAppearance;
   count: number | null;
@@ -64,7 +66,7 @@ const ReviewStep = (props: Props) => {
     let cancelled = false;
     setFailedPreview(null);
     Promise.resolve()
-      .then(() => renderLocalPreview(letter, props.appearance))
+      .then(() => renderEmailDocument(props.document, letter.locale))
       .then((data) => {
         if (!cancelled) onPreviewed.current(letter.locale, { key, data });
       })
@@ -80,7 +82,7 @@ const ReviewStep = (props: Props) => {
     return () => {
       cancelled = true;
     };
-  }, [key, fresh, letter, props.appearance]);
+  }, [key, fresh, letter, props.document]);
 
   return (
     <section className={e.card} aria-labelledby="review-title">

@@ -1,36 +1,31 @@
-import { useState } from 'react';
-import {
-  cx,
-  languageName,
-  type LetterDraft,
-  type LetterLocale,
-} from '../../utils/localModel';
+import { useState, type Dispatch, type SetStateAction } from 'react';
+import { cx, languageName, type LetterLocale } from '../../utils/localModel';
 import {
   backgroundImageStyle,
   type EmailAppearance,
 } from '../../utils/appearanceModel';
 import AppearanceSettings from './AppearanceSettings';
-import VersionEditor from './VersionEditor';
+import EmailBuilder from './EmailBuilder';
+import type { EmailDocument } from '../../utils/emailDocument';
+import { renderEmailDocument } from '../../utils/renderEmailDocument';
 import e from '../emailCampaign.module.css';
 interface Props {
-  drafts: LetterDraft[];
+  document: EmailDocument;
   activeLocale: LetterLocale;
   defaultLocale: LetterLocale;
-  appearance: EmailAppearance;
   onActive: (locale: LetterLocale) => void;
-  onChange: (locale: LetterLocale, html: string) => void;
+  onChange: Dispatch<SetStateAction<EmailDocument>>;
   onAppearance: (value: EmailAppearance) => void;
   onBack: () => void;
   onNext: () => void;
 }
 export default function DesignStep(props: Props) {
-  const [toolbarTarget, setToolbarTarget] = useState<HTMLDivElement | null>(
-    null,
-  );
   const [view, setView] = useState<'desktop' | 'mobile'>('desktop');
-  const active =
-    props.drafts.find((draft) => draft.locale === props.activeLocale) ??
-    props.drafts[0];
+  const appearance = props.document.appearance;
+  const locales = Object.keys(props.document.versions) as LetterLocale[];
+  const active = locales.includes(props.activeLocale)
+    ? props.activeLocale
+    : locales[0];
   return (
     <section className={e.card} aria-labelledby="design-title">
       <div className={e.cardHead}>
@@ -38,31 +33,25 @@ export default function DesignStep(props: Props) {
           Оформление
         </h3>
         <p className={e.cardLead}>
-          Настройте общий стиль письма и расположение картинок. Текст
-          редактируется на шаге «Письмо».
+          Добавляйте текст, картинки и кнопки. Макет общий для всех языков, а
+          содержимое у каждого своё.
         </p>
       </div>
       <div className={e.designColumns}>
-        <AppearanceSettings
-          value={props.appearance}
-          onChange={props.onAppearance}
-        />
+        <AppearanceSettings value={appearance} onChange={props.onAppearance} />
         <div className={e.designCanvas}>
           <div className={e.versions} role="tablist" aria-label="Язык макета">
-            {props.drafts.map((draft) => (
+            {locales.map((locale) => (
               <button
                 type="button"
-                key={draft.locale}
+                key={locale}
                 role="tab"
-                aria-selected={draft.locale === active.locale}
-                className={cx(
-                  e.version,
-                  draft.locale === active.locale && e.versionActive,
-                )}
-                onClick={() => props.onActive(draft.locale)}
+                aria-selected={locale === active}
+                className={cx(e.version, locale === active && e.versionActive)}
+                onClick={() => props.onActive(locale)}
               >
-                {languageName(draft.locale)}
-                {draft.locale === props.defaultLocale && (
+                {languageName(locale)}
+                {locale === props.defaultLocale && (
                   <span className={e.badge}>основная</span>
                 )}
               </button>
@@ -82,37 +71,46 @@ export default function DesignStep(props: Props) {
                 className={cx(e.segment, view === mode && e.segmentActive)}
                 onClick={() => setView(mode)}
               >
-                {mode === 'desktop' ? 'Компьютер' : 'Телефон'}
+                {mode === 'desktop' ? 'Редактор' : 'На телефоне'}
               </button>
             ))}
           </div>
-          <div ref={setToolbarTarget} />
           <div
             className={e.designStage}
             role="region"
             aria-label="Макет письма"
-            tabIndex={0}
             style={{
-              backgroundColor: props.appearance.pageBackground,
-              ...backgroundImageStyle(props.appearance.pageBackgroundImage),
+              backgroundColor: appearance.pageBackground,
+              ...backgroundImageStyle(appearance.pageBackgroundImage),
             }}
           >
             <div
               style={{
-                width: view === 'mobile' ? 375 : props.appearance.width,
+                width: view === 'mobile' ? 375 : '100%',
                 maxWidth: '100%',
                 margin: '0 auto',
               }}
             >
-              <VersionEditor
-                key={active.locale}
-                initialHtml={active.html}
-                mode="layout"
-                label={`Макет письма: ${languageName(active.locale)}`}
-                toolbarTarget={toolbarTarget}
-                appearance={props.appearance}
-                onChange={(html) => props.onChange(active.locale, html)}
-              />
+              {view === 'desktop' ? (
+                <EmailBuilder
+                  document={props.document}
+                  locale={active}
+                  onChange={props.onChange}
+                />
+              ) : (
+                <iframe
+                  title="Письмо на телефоне"
+                  sandbox=""
+                  srcDoc={renderEmailDocument(props.document, active).html}
+                  style={{
+                    width: 375,
+                    maxWidth: '100%',
+                    height: 640,
+                    border: 0,
+                    background: 'white',
+                  }}
+                />
+              )}
             </div>
           </div>
         </div>

@@ -21,7 +21,7 @@ export default function AppearanceSettings({
   return (
     <div className={e.appearanceSettings}>
       <fieldset>
-        <legend>Фон и контейнер</legend>
+        <legend>Цвета и фон</legend>
         <AppearanceColor
           label="Фон вокруг письма"
           value={value.pageBackground}
@@ -69,8 +69,7 @@ export default function AppearanceSettings({
         Сбросить оформление
       </button>
       <p className={e.fieldHint}>
-        Общие стили для всех языков. Форматирование отдельных фрагментов из
-        редактора имеет приоритет.
+        Оформление применяется ко всем языкам письма.
       </p>
     </div>
   );

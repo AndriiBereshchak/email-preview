@@ -3,7 +3,10 @@ import { linkValue, saveLetterLink } from './letterLink';
 import { renderLocalPreview } from './localModel';
 import { describe, expect, it } from 'vitest';
 import { createEmailDocument, type EmailDocument } from './emailDocument';
-import { renderEmailDocument } from './renderEmailDocument';
+import {
+  renderEmailDocument,
+  renderEmailDocumentContent,
+} from './renderEmailDocument';
 
 function fixture(): EmailDocument {
   const document = createEmailDocument(['uk', 'en']);
@@ -351,4 +354,22 @@ it('uses the existing image HTML for gallery insertion and full-width blocks', (
   expect(blockImage.style.maxWidth).toBe(editorImage.style.maxWidth);
   expect(blockImage.style.height).toBe(editorImage.style.height);
   expect(blockImage.style.width).toBe('100%');
+});
+
+it('keeps editing placeholders and interactive markers out of the exported letter', () => {
+  const document = fixture();
+  delete document.versions.uk!.blocks.title;
+  document.versions.uk!.blocks.art = { type: 'image', src: '', alt: '' };
+  document.sections[0].columns.push({ id: 'empty', blocks: [] });
+  const editing = renderEmailDocumentContent(document, 'uk', { editor: true });
+  expect(editing.html).toContain('data-block-id="title"');
+  expect(editing.html).toContain('Нажмите, чтобы написать текст');
+  expect(editing.html).toContain('data-empty-column="empty"');
+  const exported = renderEmailDocument(document, 'uk');
+  expect(exported.html).not.toContain('data-block-id');
+  expect(exported.html).not.toContain('data-empty-column');
+  expect(exported.html).not.toContain('email-editor-placeholder');
+  expect(exported.html).not.toContain('Редактировать');
+  expect(exported.text).not.toContain('Нажмите');
+  expect(exported.html).toContain('data-column-id="empty"');
 });

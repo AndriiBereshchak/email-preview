@@ -1,6 +1,3 @@
-import { letterImageHtml } from '../../utils/emailHtml';
-import { toast } from 'react-hot-toast';
-import { copy } from '../../utils/copy';
 import { useEffect, useRef, useState } from 'react';
 import {
   cx as clsx,
@@ -11,13 +8,10 @@ import {
   uncoveredLanguages,
   type LetterLocale,
   type LetterDraft,
-  type EmailImage,
   type VersionReach,
 } from '../../utils/localModel';
 import { CustomInput } from '../../parts/CustomInput/CustomInput';
 import { Field } from '../Field';
-import VersionEditor, { type EditorHandle } from './VersionEditor';
-import EmailImages from './EmailImages';
 import e from '../emailCampaign.module.css';
 
 interface Props {
@@ -28,7 +22,10 @@ interface Props {
   reach: VersionReach[];
   problems: Record<string, string | null>;
   onActive: (locale: LetterLocale) => void;
-  onChange: (locale: LetterLocale, patch: Partial<LetterDraft>) => void;
+  onChange: (
+    locale: LetterLocale,
+    patch: Partial<Pick<LetterDraft, 'subject' | 'preheader'>>,
+  ) => void;
   onAdd: (locale: LetterLocale) => void;
   onRemove: (locale: LetterLocale) => void;
   onMakeDefault: (locale: LetterLocale) => void;
@@ -50,7 +47,6 @@ const reachLine = (
 
 const LetterStep = (props: Props) => {
   const [menuOpen, setMenuOpen] = useState(false);
-  const editors = useRef(new Map<LetterLocale, EditorHandle>());
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -90,18 +86,6 @@ const LetterStep = (props: Props) => {
   const warnLanguage =
     largestUncovered &&
     largestUncovered.count > (mainTotal + coveredTotal) * 0.1;
-
-  const insertImage = (image: EmailImage) => {
-    const editor = editors.current.get(active.locale);
-    if (!editor) {
-      toast.error('Редактор ещё загружается — попробуйте через секунду');
-      return;
-    }
-    editor.insertHTML(`<p>${letterImageHtml(image)}</p>`);
-    toast.success(
-      `«${image.name}» — в версии: ${languageName(active.locale).toLowerCase()}`,
-    );
-  };
 
   return (
     <section className={e.card} aria-labelledby="letter-title">
@@ -280,17 +264,12 @@ const LetterStep = (props: Props) => {
               />
             </Field>
           </div>
-          <VersionEditor
-            label={`Текст письма: ${languageName(draft.locale)}`}
-            initialHtml={draft.html}
-            onChange={(html) => props.onChange(draft.locale, { html })}
-            onEditor={(editor) => editors.current.set(draft.locale, editor)}
-          />
-          <p className={e.fieldHint}>{copy.letterContentHint}</p>
         </div>
       ))}
 
-      <EmailImages onInsert={insertImage} />
+      <p className={e.fieldHint}>
+        Текст, картинки и кнопки добавляются на следующем шаге — «Оформление».
+      </p>
 
       <div className={e.stepFooter}>
         <button

@@ -60,3 +60,11 @@ export function createEmailDocument(
     versions,
   };
 }
+
+export function emptyEmailBlockContent(
+  type: EmailBlock['type'],
+): EmailBlockContent {
+  if (type === 'text') return { type, text: '' };
+  if (type === 'image') return { type, src: '', alt: '' };
+  return { type, text: '', href: '' };
+}

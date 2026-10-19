@@ -2,7 +2,9 @@ import {
   DEFAULT_APPEARANCE,
   type EmailAppearance,
 } from '../../utils/appearanceModel';
+import { useState } from 'react';
 import AppearanceColor from './AppearanceColor';
+import AppearanceBackgroundImage from './AppearanceBackgroundImage';
 import e from '../emailCampaign.module.css';
 export default function AppearanceSettings({
   value,
@@ -11,6 +13,7 @@ export default function AppearanceSettings({
   value: EmailAppearance;
   onChange: (value: EmailAppearance) => void;
 }) {
+  const [resetKey, setResetKey] = useState(0);
   const set = <K extends keyof EmailAppearance>(
     key: K,
     next: EmailAppearance[K],
@@ -24,10 +27,22 @@ export default function AppearanceSettings({
           value={value.pageBackground}
           onChange={(next) => set('pageBackground', next)}
         />
+        <AppearanceBackgroundImage
+          key={`pageBackground-${resetKey}`}
+          label="Фон вокруг письма"
+          value={value.pageBackgroundImage}
+          onChange={(next) => set('pageBackgroundImage', next)}
+        />
         <AppearanceColor
           label="Фон письма"
           value={value.background}
           onChange={(next) => set('background', next)}
+        />
+        <AppearanceBackgroundImage
+          key={`background-${resetKey}`}
+          label="Фон письма"
+          value={value.backgroundImage}
+          onChange={(next) => set('backgroundImage', next)}
         />
       </fieldset>
       <fieldset>
@@ -46,7 +61,10 @@ export default function AppearanceSettings({
       <button
         type="button"
         className={e.linkBtn}
-        onClick={() => onChange({ ...DEFAULT_APPEARANCE })}
+        onClick={() => {
+          setResetKey((key) => key + 1);
+          onChange({ ...DEFAULT_APPEARANCE });
+        }}
       >
         Сбросить оформление
       </button>

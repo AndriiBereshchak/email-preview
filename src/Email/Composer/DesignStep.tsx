@@ -5,7 +5,10 @@ import {
   type LetterDraft,
   type LetterLocale,
 } from '../../utils/localModel';
-import type { EmailAppearance } from '../../utils/appearanceModel';
+import {
+  backgroundImageStyle,
+  type EmailAppearance,
+} from '../../utils/appearanceModel';
 import AppearanceSettings from './AppearanceSettings';
 import VersionEditor from './VersionEditor';
 import e from '../emailCampaign.module.css';
@@ -89,7 +92,10 @@ export default function DesignStep(props: Props) {
             role="region"
             aria-label="Макет письма"
             tabIndex={0}
-            style={{ backgroundColor: props.appearance.pageBackground }}
+            style={{
+              backgroundColor: props.appearance.pageBackground,
+              ...backgroundImageStyle(props.appearance.pageBackgroundImage),
+            }}
           >
             <div
               style={{
@@ -102,6 +108,7 @@ export default function DesignStep(props: Props) {
                 key={active.locale}
                 initialHtml={active.html}
                 mode="layout"
+                label={`Макет письма: ${languageName(active.locale)}`}
                 toolbarTarget={toolbarTarget}
                 appearance={props.appearance}
                 onChange={(html) => props.onChange(active.locale, html)}

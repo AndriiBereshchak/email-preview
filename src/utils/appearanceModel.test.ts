@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_APPEARANCE, normalizeAppearance } from './appearanceModel';
+import { appearanceBodyCss } from './appearanceModel';
+import { previewKey } from './localModel';
 import { renderLocalPreview } from './localModel';
 const letter = {
   locale: 'ru' as const,
@@ -45,4 +47,48 @@ describe('email appearance', () => {
       expect(doc.querySelector('table[width="520"]')).not.toBeNull();
     }
   });
+});
+
+const image = 'data:image/png;base64,aGVsbG8=';
+it('renders independent backgrounds and removes them on reset without changing letter content', () => {
+  const appearance = {
+    ...DEFAULT_APPEARANCE,
+    backgroundImage: image,
+    pageBackgroundImage: 'data:image/jpeg;base64,d29ybGQ=',
+  };
+  const preview = renderLocalPreview(letter, appearance);
+  const doc = new DOMParser().parseFromString(preview.html, 'text/html');
+  const body = doc.querySelector<HTMLElement>('.email-body')!;
+  expect(body.style.backgroundImage).toContain(image);
+  expect(body.style.backgroundSize).toBe('cover');
+  expect(body.innerHTML).toBe(letter.html);
+  expect(doc.querySelector('style')!.textContent).toContain(
+    "background-image:url('data:image/jpeg;base64,d29ybGQ=')",
+  );
+  expect(previewKey('TRADER', letter, appearance)).not.toBe(
+    previewKey('TRADER', letter),
+  );
+  expect(appearanceBodyCss(DEFAULT_APPEARANCE)).toContain(
+    'background-image:none',
+  );
+  expect(renderLocalPreview(letter).html).not.toContain(image);
+});
+it('rejects unsafe background sources while preserving existing drafts', () => {
+  for (const src of [
+    'javascript:alert(1)',
+    'data:image/svg+xml;base64,AAAA',
+    'https://example.test/image.png',
+    `data:image/png;base64,AAA');color:red;/*`,
+  ]) {
+    const appearance = normalizeAppearance({
+      backgroundImage: src,
+      pageBackgroundImage: src,
+    });
+    expect(appearance.backgroundImage).toBe('');
+    expect(appearance.pageBackgroundImage).toBe('');
+  }
+  expect(normalizeAppearance({}).backgroundImage).toBe('');
+  expect(normalizeAppearance({ backgroundImage: image }).backgroundImage).toBe(
+    image,
+  );
 });

@@ -1,4 +1,5 @@
 import { emptyEmailBlockContent } from './emailDocument';
+import { emailBlockRows } from './emailDocumentLayout';
 import { emailImageUrl } from './appearanceImage';
 import type {
   EmailDocument,
@@ -30,7 +31,7 @@ export function renderEmailDocumentContent(
   const a = normalizeAppearance(document.appearance);
   const plain: string[] = [];
 
-  const renderBlock = (block: EmailBlock): string => {
+  const renderBlock = (block: EmailBlock, inline = false): string => {
     const content: EmailBlockContent | undefined = Object.hasOwn(
       version.blocks,
       block.id,
@@ -50,14 +51,23 @@ export function renderEmailDocumentContent(
         block.variant === 'heading'
           ? 'font-size:24px;line-height:1.3;font-weight:bold;'
           : '';
-      html = `<${tag} style="margin:0;color:${a.textColor};${style}">${lines(content.text) || (options.editor ? placeholder : '')}</${tag}>`;
+      const editable = options.editor
+        ? ' data-email-text contenteditable="plaintext-only" tabindex="0" role="textbox" aria-label="Текст письма" aria-multiline="true" data-placeholder="Напишите текст письма…"'
+        : '';
+      html = `<${tag}${editable} style="margin:0;color:${a.textColor};${style}">${lines(content.text)}</${tag}>`;
       plain.push(content.text);
     } else if (block.type === 'image' && content.type === 'image') {
       const src = emailImageUrl(content.src);
       const href = letterLinkUrl(content.href ?? '');
       if (!src && !options.editor) return '';
       html = src
-        ? letterImageHtml({ url: src, name: content.alt }, true)
+        ? letterImageHtml(
+            { url: src, name: content.alt },
+            true,
+            inline ? 100 : block.widthPercent,
+            inline ? 'left' : alignment,
+            inline ? undefined : block.offsetPercent,
+          )
         : placeholder;
       if (href) html = `<a href="${escapeHtml(href)}">${html}</a>`;
       if (content.alt || href)
@@ -71,16 +81,25 @@ export function renderEmailDocumentContent(
         radius: 4,
         background: appearanceColor(block.background, a.linkColor),
       });
-      const style = `${buttonCss}color:${appearanceColor(block.color, '#ffffff')};text-decoration:none;font-weight:bold;`;
+      const dimensions = `${Number.isFinite(block.buttonWidth) ? `width:${Math.max(48, block.buttonWidth!)}px;` : ''}${Number.isFinite(block.paddingY) ? `padding-top:${Math.max(0, block.paddingY!)}px;padding-bottom:${Math.max(0, block.paddingY!)}px;` : ''}`;
+      const style = `${buttonCss}${dimensions}color:${appearanceColor(block.color, '#ffffff')};text-decoration:none;font-weight:bold;`;
+      const draggable = options.editor
+        ? ' data-email-button draggable="true"'
+        : '';
       html = href
-        ? `<a href="${escapeHtml(href)}" style="${style}">${label}</a>`
-        : `<span style="${style}">${label}</span>`;
+        ? `<a${draggable} href="${escapeHtml(href)}" style="${style}">${label}</a>`
+        : `<span${draggable} style="${style}">${label}</span>`;
       plain.push([content.text, href].filter(Boolean).join(' — '));
     }
     const editorAttributes = options.editor
       ? ` data-block-id="${escapeHtml(block.id)}" role="button" tabindex="0" aria-label="${block.type === 'text' ? 'Редактировать текст' : block.type === 'image' ? 'Редактировать картинку' : 'Редактировать кнопку'}"`
       : '';
-    return `<tr><td${editorAttributes} align="${alignment}" style="padding:0 0 16px;text-align:${alignment};overflow-wrap:anywhere;">${html}</td></tr>`;
+    const inset =
+      block.type === 'button' && !inline && Number.isFinite(block.insetPercent)
+        ? Math.max(0, Math.min(99, block.insetPercent!))
+        : 0;
+    const position = inset ? `padding-left:${inset}%;text-align:left;` : '';
+    return `<tr><td${editorAttributes} align="${alignment}" style="padding:0 0 16px;text-align:${alignment};${position}overflow-wrap:anywhere;">${html}</td></tr>`;
   };
 
   const availableWidth = Math.max(1, a.width - a.padding * 2);
@@ -108,19 +127,44 @@ export function renderEmailDocumentContent(
       .map((column, columnIndex) => {
         const share = weight(column.weight) / maxWeight / sum;
         const width = sectionWidth * share;
-        const rows = column.blocks.map(renderBlock).join('');
+        const addButton = (beforeId?: string, index?: number) =>
+          `<tr><td class="email-editor-add-cell"><button type="button" class="${beforeId ? 'email-editor-insert' : 'email-editor-add'}" data-add-column-id="${escapeHtml(column.id)}"${beforeId ? ` data-before-block-id="${escapeHtml(beforeId)}"` : ''} aria-label="${beforeId ? `Добавить перед блоком ${index! + 1} в колонке ${columnIndex + 1}` : `Добавить в конец колонки ${columnIndex + 1}`}">${beforeId ? '+' : '＋ Добавить блок'}</button></td></tr>`;
+        const rows = emailBlockRows(column.blocks)
+          .map((row) => {
+            const firstIndex = column.blocks.indexOf(row[0]);
+            const insert = options.editor
+              ? addButton(row[0].id, firstIndex)
+              : '';
+            if (row.length === 1) return insert + renderBlock(row[0]);
+            const total = row.reduce(
+              (sum, block) => sum + (block.widthPercent ?? 1),
+              0,
+            );
+            const cells = row
+              .map(
+                (block) =>
+                  `<td class="email-inline-cell" width="${(((block.widthPercent ?? 1) / total) * 100).toFixed(4)}%" valign="top" style="vertical-align:top;padding:0 4px;width:${(((block.widthPercent ?? 1) / total) * 100).toFixed(4)}%;">${table(renderBlock(block, true), 'table-layout:fixed;')}</td>`,
+              )
+              .join('');
+            return (
+              insert +
+              `<tr><td>${table(`<tr>${cells}</tr>`, 'table-layout:fixed;', `data-row-id="${escapeHtml(row[0].rowId!)}"`)}</td></tr>`
+            );
+          })
+          .join('');
         const contents = table(
-          rows ||
-            (options.editor
-              ? `<tr><td data-empty-column="${escapeHtml(column.id)}" role="button" tabindex="0" aria-label="Добавить в колонку ${columnIndex + 1}"><span class="email-editor-empty">＋ Добавить содержимое</span></td></tr>`
-              : '<tr><td></td></tr>'),
+          options.editor
+            ? column.blocks.length
+              ? rows + addButton()
+              : `<tr><td data-empty-column="${escapeHtml(column.id)}" data-add-column-id="${escapeHtml(column.id)}" role="button" tabindex="0" aria-label="Добавить в колонку ${columnIndex + 1}"><span class="email-editor-empty">＋ Добавить блок</span></td></tr>`
+            : rows || '<tr><td></td></tr>',
           `font-size:${a.fontSize}px;line-height:${a.lineHeight};color:${a.textColor};`,
         );
         const inner = table(
           `<tr><td style="padding:0 8px;">${contents}</td></tr>`,
           'table-layout:fixed;',
         );
-        return `<!--[if mso]><td width="${width.toFixed(2)}" valign="${section.verticalAlignment ?? 'top'}"><![endif]--><div class="email-column" data-column-id="${escapeHtml(column.id)}"${options.editor ? ` role="group" aria-label="Колонка ${columnIndex + 1}"` : ''} style="display:inline-block;vertical-align:${section.verticalAlignment ?? 'top'};width:100%;max-width:${width.toFixed(4)}px;">${inner}</div><!--[if mso]></td><![endif]-->`;
+        return `<!--[if mso]><td width="${width.toFixed(2)}" valign="${section.verticalAlignment ?? 'top'}"><![endif]--><div class="email-column" data-column-id="${escapeHtml(column.id)}"${options.editor ? ` role="group" aria-label="Колонка ${columnIndex + 1}"` : ''} style="display:inline-block;vertical-align:${section.verticalAlignment ?? 'top'};width:${options.editor ? `${(share * 100).toFixed(4)}%` : '100%'};max-width:${width.toFixed(4)}px;">${inner}</div><!--[if mso]></td><![endif]-->`;
       })
       .join('');
     const content = `<!--[if mso]><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="${sectionWidth}"><tr><![endif]-->${columns}<!--[if mso]></tr></table><![endif]-->`;

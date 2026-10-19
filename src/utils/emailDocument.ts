@@ -2,21 +2,33 @@ import { DEFAULT_APPEARANCE, type EmailAppearance } from './appearanceModel';
 import type { LetterLocale } from './localModel';
 
 export type EmailAlignment = 'left' | 'center' | 'right';
-export type EmailBlock =
+export type EmailBlock = (
   | {
       id: string;
       type: 'text';
       alignment?: EmailAlignment;
       variant?: 'body' | 'heading';
     }
-  | { id: string; type: 'image'; alignment?: EmailAlignment }
+  | {
+      id: string;
+      type: 'image';
+      alignment?: EmailAlignment;
+      offsetPercent?: number;
+    }
   | {
       id: string;
       type: 'button';
       alignment?: EmailAlignment;
+      insetPercent?: number;
+      buttonWidth?: number;
+      paddingY?: number;
       color?: string;
       background?: string;
-    };
+    }
+) & {
+  rowId?: string;
+  widthPercent?: number;
+};
 
 export interface EmailColumn {
   id: string;

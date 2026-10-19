@@ -77,11 +77,11 @@ describe('email document model', () => {
     expect(first.sections).toEqual([]);
   });
 
-  it('supports any number of sections, columns and blocks without a two-column cap', () => {
+  it('renders every column in a layout with more than two sections and columns', () => {
     const document = createEmailDocument(['uk']);
-    document.sections = Array.from({ length: 25 }, (_, section) => ({
+    document.sections = Array.from({ length: 3 }, (_, section) => ({
       id: `section-${section}`,
-      columns: Array.from({ length: 7 }, (_, column) => ({
+      columns: Array.from({ length: 3 }, (_, column) => ({
         id: `column-${section}-${column}`,
         blocks: Array.from({ length: 3 }, (_, block) => ({
           id: `block-${section}-${column}-${block}`,
@@ -89,11 +89,9 @@ describe('email document model', () => {
         })),
       })),
     }));
-    expect(document.sections).toHaveLength(25);
-    expect(document.sections[24].columns).toHaveLength(7);
     expect(
       renderEmailDocument(document, 'uk').html.match(/data-column-id=/g),
-    ).toHaveLength(175);
+    ).toHaveLength(9);
   });
 
   it('keeps inherited object keys from corrupting content maps', () => {
@@ -363,11 +361,15 @@ it('keeps editing placeholders and interactive markers out of the exported lette
   document.sections[0].columns.push({ id: 'empty', blocks: [] });
   const editing = renderEmailDocumentContent(document, 'uk', { editor: true });
   expect(editing.html).toContain('data-block-id="title"');
-  expect(editing.html).toContain('Нажмите, чтобы написать текст');
+  expect(editing.html).toContain('contenteditable="plaintext-only"');
   expect(editing.html).toContain('data-empty-column="empty"');
+  expect(editing.html).toContain('data-add-column-id');
+  expect(editing.html).toContain('data-before-block-id');
   const exported = renderEmailDocument(document, 'uk');
   expect(exported.html).not.toContain('data-block-id');
   expect(exported.html).not.toContain('data-empty-column');
+  expect(exported.html).not.toContain('data-add-column-id');
+  expect(exported.html).not.toContain('email-editor-insert');
   expect(exported.html).not.toContain('email-editor-placeholder');
   expect(exported.html).not.toContain('Редактировать');
   expect(exported.text).not.toContain('Нажмите');

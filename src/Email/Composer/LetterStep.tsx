@@ -281,6 +281,7 @@ const LetterStep = (props: Props) => {
             </Field>
           </div>
           <VersionEditor
+            label={`Текст письма: ${languageName(draft.locale)}`}
             initialHtml={draft.html}
             onChange={(html) => props.onChange(draft.locale, { html })}
             onEditor={(editor) => editors.current.set(draft.locale, editor)}

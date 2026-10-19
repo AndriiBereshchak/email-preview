@@ -19,7 +19,7 @@ interface Props {
   initialHtml: string;
   onChange: (html: string) => void;
   onEditor?: (editor: EditorHandle) => void;
-  mode?: 'content' | 'layout' | 'decoration';
+  mode?: 'content' | 'layout';
   label?: string;
   toolbarTarget?: HTMLElement | null;
   appearance?: EmailAppearance;
@@ -30,8 +30,8 @@ export default function VersionEditor({
   onChange,
   onEditor,
   mode = 'content',
+  label = mode === 'layout' ? 'Макет письма' : 'Текст письма',
   appearance = DEFAULT_APPEARANCE,
-  label,
   toolbarTarget,
 }: Props) {
   const [instance, setInstance] = useState<SunEditorCore | null>(null);
@@ -81,6 +81,7 @@ export default function VersionEditor({
       const root = instance.core.context.element.wysiwyg as HTMLElement;
       root.contentEditable = mode === 'layout' ? 'false' : 'true';
       if (label) root.setAttribute('aria-label', label);
+      else root.removeAttribute('aria-label');
     }
   }, [instance, mode, label]);
 
@@ -98,11 +99,9 @@ export default function VersionEditor({
   return (
     <div
       className={
-        mode === 'decoration'
-          ? `${e.letterEditor} ${e.decorationEditor}`
-          : mode === 'layout'
-            ? `${e.letterEditor} ${e.layoutEditor}`
-            : `${e.letterEditor} ${e.contentEditor}`
+        mode === 'layout'
+          ? `${e.letterEditor} ${e.layoutEditor}`
+          : `${e.letterEditor} ${e.contentEditor}`
       }
       style={{ '--email-link-color': appearance.linkColor } as CSSProperties}
     >
@@ -117,7 +116,6 @@ export default function VersionEditor({
       <SunEditor
         readOnly={mode === 'layout'}
         hideToolbar={mode !== 'content'}
-        placeholder={label}
         setDefaultStyle={
           mode !== 'content' ? appearanceBodyCss(appearance) : undefined
         }

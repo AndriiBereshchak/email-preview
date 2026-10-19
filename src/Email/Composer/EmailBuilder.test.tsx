@@ -1,0 +1,745 @@
+import { useState } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render } from '@testing-library/react';
+import EmailBuilder from './EmailBuilder';
+import { createEmailDocument } from '../../utils/emailDocument';
+
+function inlineText(page: { container: HTMLElement }) {
+  const editors = Array.from(
+    page.container.querySelectorAll<HTMLElement>('[data-email-text]'),
+  );
+  return (
+    editors.find((node) => node === window.document.activeElement) ??
+    editors.at(-1)!
+  );
+}
+
+function fixture() {
+  const document = createEmailDocument(['ru', 'uk']);
+  document.sections = [
+    {
+      id: 'first',
+      columns: [
+        {
+          id: 'left',
+          blocks: [
+            { id: 'a', type: 'text' },
+            { id: 'picture', type: 'image' },
+            { id: 'b', type: 'text' },
+          ],
+        },
+        { id: 'right', blocks: [] },
+      ],
+    },
+    {
+      id: 'second',
+      columns: [{ id: 'last', blocks: [{ id: 'c', type: 'text' }] }],
+    },
+  ];
+  document.versions.ru!.blocks = {
+    a: { type: 'text', text: 'Первый' },
+    b: { type: 'text', text: 'Второй' },
+    c: { type: 'text', text: 'Последний' },
+    picture: {
+      type: 'image',
+      src: 'https://example.test/banner.png',
+      alt: 'Баннер',
+    },
+  };
+  document.versions.uk!.blocks = {
+    a: { type: 'text', text: 'Перший' },
+    picture: {
+      type: 'image',
+      src: 'https://example.test/uk.png',
+      alt: 'Банер',
+    },
+  };
+  return document;
+}
+function setup(initial = fixture()) {
+  let current = initial;
+  function Harness() {
+    const [document, setDocument] = useState(current);
+    current = document;
+    return (
+      <EmailBuilder document={document} locale="ru" onChange={setDocument} />
+    );
+  }
+  return { ...render(<Harness />), document: () => current };
+}
+const rect = (left: number, top: number, width: number, height: number) =>
+  ({
+    left,
+    top,
+    width,
+    height,
+    right: left + width,
+    bottom: top + height,
+    x: left,
+    y: top,
+    toJSON() {},
+  }) as DOMRect;
+
+beforeEach(() => {
+  class Pointer extends MouseEvent {
+    pointerId: number;
+    constructor(type: string, init: PointerEventInit = {}) {
+      super(type, init);
+      this.pointerId = init.pointerId ?? 1;
+    }
+  }
+  vi.stubGlobal('PointerEvent', Pointer);
+  class Drag extends MouseEvent {
+    dataTransfer: DataTransfer | null;
+    constructor(type: string, init: DragEventInit = {}) {
+      super(type, init);
+      this.dataTransfer = init.dataTransfer ?? null;
+    }
+  }
+  vi.stubGlobal('DragEvent', Drag);
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
+    function (this: HTMLElement) {
+      const section = this.closest<HTMLElement>('[data-section-id]');
+      const top = section?.dataset.sectionId === 'second' ? 240 : 20;
+      const column = this.closest<HTMLElement>('[data-column-id]');
+      const siblings = column
+        ? (Array.from(column.parentElement!.children).filter(
+            (node) => (node as HTMLElement).dataset.columnId,
+          ) as HTMLElement[])
+        : [];
+      const columnIndex = column ? siblings.indexOf(column) : 0;
+      const width = column ? parseFloat(column.style.maxWidth) : 560;
+      const left =
+        180 +
+        siblings
+          .slice(0, columnIndex)
+          .reduce((total, node) => total + parseFloat(node.style.maxWidth), 0);
+      if (this.dataset.columnId) return rect(left, top + 16, width, 180);
+      if (this.dataset.sectionId) return rect(164, top, 592, 200);
+      const block = this.closest<HTMLElement>('[data-block-id]');
+      if (block) {
+        const blocks = Array.from(column!.querySelectorAll('[data-block-id]'));
+        const y = top + 16 + blocks.indexOf(block) * 60;
+        const blockWidth = width - 16;
+        return rect(
+          left + 8,
+          y,
+          this.tagName === 'IMG'
+            ? (blockWidth * parseFloat(this.style.width)) / 100
+            : this.hasAttribute('data-email-button')
+              ? 96
+              : blockWidth,
+          this.tagName === 'IMG'
+            ? (blockWidth * parseFloat(this.style.width)) / 200
+            : 60,
+        );
+      }
+      return rect(0, 0, 1000, 700);
+    },
+  );
+  Object.defineProperty(HTMLElement.prototype, 'setPointerCapture', {
+    configurable: true,
+    value: vi.fn(),
+  });
+});
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+const transfer = () => ({
+  setData: vi.fn(),
+  effectAllowed: '',
+  dropEffect: '',
+});
+
+it('drags a whole section after another without changing translations', () => {
+  const page = setup();
+  const versions = page.document().versions;
+  fireEvent.dragStart(
+    page.getByRole('button', { name: 'Переместить секцию 1' }),
+    { dataTransfer: transfer() },
+  );
+  const destination = page.container.querySelector(
+    '[data-section-id="second"]',
+  )!;
+  fireEvent.dragOver(destination, { clientY: 430, dataTransfer: transfer() });
+  fireEvent.drop(destination);
+  expect(page.document().sections.map((section) => section.id)).toEqual([
+    'second',
+    'first',
+  ]);
+  expect(page.document().versions).toBe(versions);
+});
+
+it('drags a selected block into an empty column and keeps every translation', () => {
+  const page = setup();
+  const versions = page.document().versions;
+  fireEvent.click(
+    page.getAllByRole('button', { name: 'Редактировать текст' })[0],
+  );
+  fireEvent.dragStart(page.getByRole('button', { name: 'Переместить блок' }), {
+    dataTransfer: transfer(),
+  });
+  expect(page.queryByRole('dialog')).toBeNull();
+  const destination = page.getByRole('button', {
+    name: 'Добавить в колонку 2',
+  });
+  fireEvent.dragOver(destination, { clientY: 100, dataTransfer: transfer() });
+  fireEvent.drop(destination);
+  expect(
+    page.document().sections[0].columns[0].blocks.map((block) => block.id),
+  ).toEqual(['picture', 'b']);
+  expect(
+    page.document().sections[0].columns[1].blocks.map((block) => block.id),
+  ).toEqual(['a']);
+  expect(page.document().versions).toBe(versions);
+  expect(
+    page.container.querySelector('[data-block-id="a"] [data-email-text]'),
+  ).toHaveProperty('textContent', 'Первый');
+});
+
+it('reorders blocks within a column using the insertion line', () => {
+  const page = setup();
+  fireEvent.click(
+    page.getAllByRole('button', { name: 'Редактировать текст' })[0],
+  );
+  fireEvent.dragStart(page.getByRole('button', { name: 'Переместить блок' }), {
+    dataTransfer: transfer(),
+  });
+  const destination = page.container.querySelector('[data-block-id="b"]')!;
+  fireEvent.dragOver(destination, { clientY: 210, dataTransfer: transfer() });
+  fireEvent.drop(destination);
+  expect(
+    page.document().sections[0].columns[0].blocks.map((block) => block.id),
+  ).toEqual(['picture', 'b', 'a']);
+});
+
+it('ignores external drops and cancels a drag outside the canvas', () => {
+  const page = setup();
+  const original = page.document();
+  const destination = page.container.querySelector(
+    '[data-section-id="second"]',
+  )!;
+  fireEvent.dragOver(destination, { clientY: 430, dataTransfer: transfer() });
+  fireEvent.drop(destination);
+  expect(page.document()).toBe(original);
+  fireEvent.dragStart(
+    page.getByRole('button', { name: 'Переместить секцию 1' }),
+    { dataTransfer: transfer() },
+  );
+  fireEvent.dragOver(destination, { clientY: 430, dataTransfer: transfer() });
+  fireEvent.dragEnd(window);
+  fireEvent.drop(destination);
+  expect(page.document()).toBe(original);
+});
+
+it('resizes images with either pointer axis and clamps to the column width', () => {
+  const page = setup();
+  fireEvent.click(page.getByRole('button', { name: 'Редактировать картинку' }));
+  const handle = page.getByRole('button', { name: 'Изменить размер картинки' });
+  fireEvent.pointerDown(handle, { pointerId: 1, button: 0, clientX: 400 });
+  fireEvent.pointerMove(handle, { pointerId: 1, clientX: 268 });
+  fireEvent.pointerUp(handle, { pointerId: 1 });
+  const block = page.document().sections[0].columns[0].blocks[1];
+  expect(block).toMatchObject({ type: 'image', widthPercent: 50 });
+  fireEvent.pointerDown(handle, {
+    pointerId: 2,
+    button: 0,
+    clientX: 200,
+    clientY: 100,
+  });
+  fireEvent.pointerMove(handle, { pointerId: 2, clientX: 200, clientY: 67 });
+  fireEvent.pointerUp(handle, { pointerId: 2 });
+  expect(page.document().sections[0].columns[0].blocks[1]).toMatchObject({
+    widthPercent: 25,
+  });
+  fireEvent.pointerDown(handle, { pointerId: 1, button: 0, clientX: 200 });
+  fireEvent.pointerMove(handle, { pointerId: 1, clientX: 9999 });
+  fireEvent.pointerUp(handle, { pointerId: 1 });
+  expect(page.document().sections[0].columns[0].blocks[1]).toMatchObject({
+    widthPercent: 100,
+  });
+});
+
+it('restores the previous image size on Escape or pointer cancellation', () => {
+  const page = setup();
+  fireEvent.click(page.getByRole('button', { name: 'Редактировать картинку' }));
+  const handle = page.getByRole('button', { name: 'Изменить размер картинки' });
+  fireEvent.pointerDown(handle, { pointerId: 1, button: 0, clientX: 400 });
+  fireEvent.pointerMove(handle, { pointerId: 1, clientX: 300 });
+  expect(window.document.activeElement).toBe(handle);
+  fireEvent.keyDown(window.document.activeElement!, { key: 'Escape' });
+  expect(page.document().sections[0].columns[0].blocks[1]).toMatchObject({
+    widthPercent: undefined,
+  });
+  fireEvent.pointerDown(handle, { pointerId: 2, button: 0, clientX: 400 });
+  fireEvent.pointerMove(handle, { pointerId: 2, clientX: 300 });
+  fireEvent.pointerCancel(handle, { pointerId: 2 });
+  expect(page.document().sections[0].columns[0].blocks[1]).toMatchObject({
+    widthPercent: undefined,
+  });
+});
+
+it('resizes only the adjacent columns while preserving their combined weight', () => {
+  const page = setup();
+  fireEvent.click(
+    page.getAllByRole('button', { name: 'Редактировать текст' })[0],
+  );
+  const handle = page.getByRole('separator', {
+    name: 'Изменить ширину колонок 1 и 2',
+  });
+  const versions = page.document().versions;
+  fireEvent.pointerDown(handle, { pointerId: 1, button: 0, clientX: 400 });
+  fireEvent.pointerMove(handle, { pointerId: 1, clientX: 540 });
+  fireEvent.pointerUp(handle, { pointerId: 1 });
+  const [left, right] = page.document().sections[0].columns;
+  expect(left.weight).toBeCloseTo(1.5);
+  expect(right.weight).toBeCloseTo(0.5);
+  expect(page.document().sections[1].columns[0].weight).toBeUndefined();
+  expect(page.document().versions).toBe(versions);
+  fireEvent.pointerDown(handle, { pointerId: 2, button: 0, clientX: 400 });
+  fireEvent.pointerMove(handle, { pointerId: 2, clientX: -9999 });
+  fireEvent.pointerUp(handle, { pointerId: 2 });
+  expect(page.document().sections[0].columns[0].weight).toBeGreaterThan(0);
+  expect(page.document().sections[0].columns[1].weight).toBeGreaterThan(0);
+});
+
+it('supports keyboard movement and resizing on the same handles', () => {
+  const page = setup();
+  fireEvent.keyDown(
+    page.getByRole('button', { name: 'Переместить секцию 1' }),
+    { key: 'ArrowDown' },
+  );
+  expect(page.document().sections[0].id).toBe('second');
+  fireEvent.click(page.getByRole('button', { name: 'Редактировать картинку' }));
+  fireEvent.keyDown(page.getByRole('button', { name: 'Переместить блок' }), {
+    key: 'ArrowUp',
+  });
+  expect(page.document().sections[1].columns[0].blocks[0].id).toBe('picture');
+  fireEvent.keyDown(
+    page.getByRole('button', { name: 'Изменить размер картинки' }),
+    { key: 'ArrowLeft' },
+  );
+  expect(page.document().sections[1].columns[0].blocks[0]).toMatchObject({
+    widthPercent: 98,
+  });
+});
+
+it('allows dragging the image itself to another column without using a handle', () => {
+  const page = setup();
+  const versions = page.document().versions;
+  const image = page.container.querySelector('[data-block-id="picture"] img')!;
+  const started = fireEvent.dragStart(image, { dataTransfer: transfer() });
+  expect(started).toBe(true);
+  expect(page.queryByRole('dialog')).toBeNull();
+  const destination = page.getByRole('button', {
+    name: 'Добавить в колонку 2',
+  });
+  fireEvent.dragOver(destination, {
+    clientX: 600,
+    clientY: 100,
+    dataTransfer: transfer(),
+  });
+  fireEvent.drop(destination);
+  expect(
+    page.document().sections[0].columns[1].blocks.map((block) => block.id),
+  ).toEqual(['picture']);
+  expect(page.document().versions).toBe(versions);
+});
+
+it('inserts a chosen block exactly between existing blocks without copying translations', () => {
+  const page = setup();
+  const versions = page.document().versions;
+  expect(page.queryByRole('button', { name: 'Текст' })).toBeNull();
+  expect(page.queryByRole('button', { name: '+ Секция' })).toBeNull();
+  fireEvent.click(
+    page.getByRole('button', { name: 'Добавить перед блоком 3 в колонке 1' }),
+  );
+  fireEvent.click(page.getByRole('button', { name: 'Кнопка' }));
+  const blocks = page.document().sections[0].columns[0].blocks;
+  expect(blocks.map((block) => block.type)).toEqual([
+    'text',
+    'image',
+    'button',
+    'text',
+  ]);
+  expect(blocks[3].id).toBe('b');
+  expect(page.document().versions).toBe(versions);
+  expect(page.queryByRole('dialog', { name: 'Добавить блок' })).toBeNull();
+  expect(
+    page.getByRole('dialog', { name: 'Настройки блока кнопка' }),
+  ).toBeTruthy();
+});
+
+it('adds to the clicked empty column regardless of the previously selected block', () => {
+  const page = setup();
+  fireEvent.click(
+    page.getAllByRole('button', { name: 'Редактировать текст' }).at(-1)!,
+  );
+  fireEvent.click(page.getByRole('button', { name: 'Добавить в колонку 2' }));
+  fireEvent.click(page.getByRole('button', { name: 'Текст' }));
+  expect(page.document().sections[0].columns[1].blocks).toHaveLength(1);
+  expect(
+    page.document().sections[1].columns[0].blocks.map((block) => block.id),
+  ).toEqual(['c']);
+  fireEvent.input(inlineText(page), {
+    target: { textContent: 'Новый блок справа' },
+  });
+  expect(
+    page.document().versions.ru!.blocks[
+      page.document().sections[0].columns[1].blocks[0].id
+    ],
+  ).toEqual({ type: 'text', text: 'Новый блок справа' });
+});
+
+it('appends only to the explicitly chosen column and cancels insertion without changing the document', () => {
+  const page = setup();
+  const before = page.document();
+  const points = page.getAllByRole('button', {
+    name: 'Добавить в конец колонки 1',
+  });
+  fireEvent.click(points.at(-1)!);
+  const menu = page.getByRole('dialog', { name: 'Добавить блок' });
+  fireEvent.keyDown(menu, { key: 'Escape' });
+  expect(page.queryByRole('dialog')).toBeNull();
+  expect(page.document()).toBe(before);
+  expect(window.document.activeElement).toBe(points.at(-1));
+  fireEvent.click(points.at(-1)!);
+  fireEvent.click(page.getByRole('button', { name: 'Картинка' }));
+  expect(
+    page.document().sections[1].columns[0].blocks.map((block) => block.type),
+  ).toEqual(['text', 'image']);
+  expect(
+    page.document().sections[0].columns[0].blocks.map((block) => block.id),
+  ).toEqual(['a', 'picture', 'b']);
+});
+
+it('adds sections only at the bottom and appends columns on the right of the chosen section', () => {
+  const page = setup();
+  fireEvent.click(
+    page.getAllByRole('button', { name: 'Редактировать текст' })[0],
+  );
+  fireEvent.click(page.getByRole('button', { name: 'Настройки секции 1' }));
+  fireEvent.click(page.getByRole('button', { name: '+ Колонка справа' }));
+  expect(page.document().sections[0].columns).toHaveLength(3);
+  expect(page.document().sections[0].columns[2].blocks).toEqual([]);
+  expect(page.document().sections[1].columns).toHaveLength(1);
+  fireEvent.click(page.getByRole('button', { name: '+ Добавить секцию' }));
+  expect(
+    page
+      .document()
+      .sections.map((section) => section.id)
+      .slice(0, 2),
+  ).toEqual(['first', 'second']);
+  expect(page.document().sections[2].columns).toHaveLength(1);
+  expect(page.document().sections[2].columns[0].blocks).toEqual([]);
+});
+
+it('keeps drag-and-drop insertion consistent with the new plus between blocks', () => {
+  const page = setup();
+  fireEvent.click(
+    page.getAllByRole('button', { name: 'Редактировать текст' })[0],
+  );
+  fireEvent.dragStart(page.getByRole('button', { name: 'Переместить блок' }), {
+    dataTransfer: transfer(),
+  });
+  const point = page.getByRole('button', {
+    name: 'Добавить перед блоком 3 в колонке 1',
+  });
+  fireEvent.dragOver(point, {
+    clientX: 300,
+    clientY: 150,
+    dataTransfer: transfer(),
+  });
+  fireEvent.drop(point);
+  expect(
+    page.document().sections[0].columns[0].blocks.map((block) => block.id),
+  ).toEqual(['picture', 'a', 'b']);
+});
+
+it('creates the first section from the empty-state action', () => {
+  const page = setup(createEmailDocument());
+  expect(
+    page.getAllByRole('button', { name: '+ Добавить секцию' }),
+  ).toHaveLength(1);
+  fireEvent.click(page.getByText('Добавьте первую секцию'));
+  expect(page.document().sections).toHaveLength(1);
+  expect(page.queryByText('Добавьте первую секцию')).toBeNull();
+});
+
+it('deletes the intended section from its own controls and removes its content in all languages', () => {
+  const page = setup();
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+  fireEvent.click(page.getByRole('button', { name: 'Удалить секцию 1' }));
+  expect(page.document().sections).toHaveLength(2);
+  confirm.mockReturnValue(true);
+  fireEvent.click(page.getByRole('button', { name: 'Удалить секцию 1' }));
+  expect(page.document().sections.map((section) => section.id)).toEqual([
+    'second',
+  ]);
+  expect(Object.keys(page.document().versions.ru!.blocks)).toEqual(['c']);
+  expect(page.document().versions.uk!.blocks).toEqual({});
+  fireEvent.click(page.getByRole('button', { name: 'Удалить секцию 1' }));
+  expect(page.document().sections).toEqual([]);
+  expect(page.getByText('Добавьте первую секцию')).toBeTruthy();
+});
+
+it('opens the columns of the clicked section and deletes only the intended column', () => {
+  const page = setup();
+  fireEvent.click(page.getByRole('button', { name: 'Настройки секции 2' }));
+  expect(page.getByRole('dialog', { name: 'Колонки секции' })).toBeTruthy();
+  expect(page.queryByRole('button', { name: 'Удалить колонку 1' })).toBeNull();
+  fireEvent.click(page.getByRole('button', { name: 'Настройки секции 1' }));
+  fireEvent.click(page.getByRole('button', { name: 'Удалить колонку 2' }));
+  expect(
+    page.document().sections[0].columns.map((column) => column.id),
+  ).toEqual(['left']);
+  expect(
+    page.document().sections[1].columns.map((column) => column.id),
+  ).toEqual(['last']);
+});
+
+it('adds text beside a resized image using the plus in its free space', () => {
+  const page = setup();
+  fireEvent.click(page.getByRole('button', { name: 'Редактировать картинку' }));
+  const resize = page.getByRole('button', { name: 'Изменить размер картинки' });
+  fireEvent.pointerDown(resize, { pointerId: 1, button: 0, clientX: 400 });
+  fireEvent.pointerMove(resize, { pointerId: 1, clientX: 268 });
+  fireEvent.pointerUp(resize, { pointerId: 1 });
+  const versions = page.document().versions;
+  fireEvent.click(
+    page.getByRole('button', { name: 'Добавить справа от картинки' }),
+  );
+  fireEvent.click(page.getByRole('button', { name: 'Текст' }));
+  const blocks = page.document().sections[0].columns[0].blocks;
+  expect(blocks.map((block) => block.type)).toEqual([
+    'text',
+    'image',
+    'text',
+    'text',
+  ]);
+  expect(blocks[1].rowId).toBeTruthy();
+  expect(blocks[2].rowId).toBe(blocks[1].rowId);
+  expect(blocks[1].widthPercent).toBe(50);
+  expect(blocks[2].widthPercent).toBe(50);
+  expect(page.document().versions).toBe(versions);
+});
+
+it('moves an image horizontally to intermediate positions instead of snapping to three alignments', () => {
+  const page = setup();
+  fireEvent.click(page.getByRole('button', { name: 'Редактировать картинку' }));
+  const resize = page.getByRole('button', { name: 'Изменить размер картинки' });
+  fireEvent.pointerDown(resize, { pointerId: 1, button: 0, clientX: 400 });
+  fireEvent.pointerMove(resize, { pointerId: 1, clientX: 268 });
+  fireEvent.pointerUp(resize, { pointerId: 1 });
+  const image = () =>
+    page.container.querySelector('[data-block-id="picture"] img')!;
+  fireEvent.dragStart(image(), { clientX: 220, dataTransfer: transfer() });
+  fireEvent.dragOver(
+    page.container.querySelector('[data-block-id="picture"]')!,
+    { clientX: 252, clientY: 110, dataTransfer: transfer() },
+  );
+  fireEvent.drop(page.container.querySelector('[data-block-id="picture"]')!);
+  const block = page.document().sections[0].columns[0].blocks[1];
+  expect(block.type).toBe('image');
+  if (block.type === 'image') {
+    expect(block.offsetPercent).toBeGreaterThan(0);
+    expect(block.offsetPercent).toBeLessThan(100);
+  }
+  fireEvent.click(page.getByRole('button', { name: 'По центру' }));
+  expect(page.document().sections[0].columns[0].blocks[1]).toMatchObject({
+    alignment: 'center',
+    offsetPercent: undefined,
+  });
+});
+
+it('moves the actual button horizontally and adds content beside its natural width', () => {
+  const initial = fixture();
+  initial.sections[0].columns[0].blocks = [{ id: 'cta', type: 'button' }];
+  initial.versions.ru!.blocks.cta = {
+    type: 'button',
+    text: 'Далее',
+    href: 'https://example.test',
+  };
+  const page = setup(initial);
+  const button = () =>
+    page.container.querySelector<HTMLElement>('[data-email-button]')!;
+  const cell = () => button().closest<HTMLElement>('[data-block-id]')!;
+  expect(button().draggable).toBe(true);
+  fireEvent.dragStart(button(), { clientX: 210, dataTransfer: transfer() });
+  fireEvent.dragOver(cell(), {
+    clientX: 242,
+    clientY: 50,
+    dataTransfer: transfer(),
+  });
+  fireEvent.drop(cell(), { dataTransfer: transfer() });
+  const moved = page.document().sections[0].columns[0].blocks[0];
+  expect(moved.type).toBe('button');
+  if (moved.type === 'button') expect(moved.insetPercent).toBeGreaterThan(0);
+  const versions = page.document().versions;
+  fireEvent.click(
+    page.getByRole('button', { name: 'Добавить справа от кнопки' }),
+  );
+  fireEvent.click(page.getByRole('button', { name: 'Текст' }));
+  const row = page.document().sections[0].columns[0].blocks;
+  expect(row[0].rowId).toBe(row[1].rowId);
+  expect(row[0].widthPercent).toBeLessThan(50);
+  expect(row[0].widthPercent! + row[1].widthPercent!).toBeCloseTo(100);
+  expect(page.document().versions).toBe(versions);
+});
+
+it('resizes button width and padding without changing text size, clamps to its cell, and cancels changes', () => {
+  Object.defineProperty(Range.prototype, 'getBoundingClientRect', {
+    configurable: true,
+    value: () => rect(0, 0, 48, 22),
+  });
+  const initial = fixture();
+  initial.sections[0].columns[0].blocks = [{ id: 'cta', type: 'button' }];
+  initial.versions.ru!.blocks.cta = { type: 'button', text: 'Далее', href: '' };
+  const page = setup(initial);
+  fireEvent.click(page.getByRole('button', { name: 'Редактировать кнопку' }));
+  const handle = page.getByRole('button', { name: 'Изменить размер кнопки' });
+  const versions = page.document().versions;
+  fireEvent.pointerDown(handle, {
+    pointerId: 1,
+    button: 0,
+    clientX: 200,
+    clientY: 100,
+  });
+  fireEvent.pointerMove(handle, { pointerId: 1, clientX: 260, clientY: 120 });
+  fireEvent.pointerUp(handle, { pointerId: 1 });
+  expect(page.document().sections[0].columns[0].blocks[0]).toMatchObject({
+    buttonWidth: 156,
+    paddingY: 22,
+  });
+  expect(
+    page.container.querySelector<HTMLElement>('[data-email-button]')!.style
+      .fontSize,
+  ).toBe('16px');
+  expect(page.document().versions).toBe(versions);
+  fireEvent.pointerDown(handle, {
+    pointerId: 2,
+    button: 0,
+    clientX: 200,
+    clientY: 100,
+  });
+  fireEvent.pointerMove(handle, { pointerId: 2, clientX: 9999, clientY: 200 });
+  expect(page.document().sections[0].columns[0].blocks[0].type).toBe('button');
+  const block = page.document().sections[0].columns[0].blocks[0];
+  if (block.type === 'button') expect(block.buttonWidth).toBeLessThan(300);
+  fireEvent.pointerCancel(handle, { pointerId: 2 });
+  expect(page.document().sections[0].columns[0].blocks[0]).toMatchObject({
+    buttonWidth: 156,
+    paddingY: 22,
+  });
+});
+
+it.each(['image', 'button'] as const)(
+  'keeps free space beside an unselected %s available for moving existing text',
+  (type) => {
+    const initial = fixture();
+    initial.sections[0].columns[0].blocks[1] =
+      type === 'image'
+        ? { id: 'picture', type, widthPercent: 40 }
+        : { id: 'picture', type };
+    if (type === 'button')
+      initial.versions.ru!.blocks.picture = { type, text: 'Далее', href: '' };
+    const page = setup(initial);
+    const name = `Добавить справа от ${type === 'image' ? 'картинки' : 'кнопки'}`;
+    expect(page.getByRole('button', { name })).toBeTruthy();
+    fireEvent.click(
+      page.getAllByRole('button', { name: 'Редактировать текст' })[0],
+    );
+    fireEvent.dragStart(
+      page.getByRole('button', { name: 'Переместить блок' }),
+      { dataTransfer: transfer() },
+    );
+    const area = page.getByRole('button', { name });
+    expect(parseFloat(area.style.width)).toBeGreaterThan(48);
+    fireEvent.dragOver(area, { dataTransfer: transfer() });
+    fireEvent.drop(area, { dataTransfer: transfer() });
+    const blocks = page.document().sections[0].columns[0].blocks;
+    expect(blocks.map((block) => block.id)).toEqual(['picture', 'a', 'b']);
+    expect(blocks[0].rowId).toBeTruthy();
+    expect(blocks[1].rowId).toBe(blocks[0].rowId);
+    expect(page.document().versions).toBe(initial.versions);
+  },
+);
+
+it('keeps the editable node while typing and pastes plain text at the caret', () => {
+  const page = setup();
+  const editor = page.container.querySelector<HTMLElement>(
+    '[data-block-id="a"] [data-email-text]',
+  )!;
+  fireEvent.click(editor);
+  editor.focus();
+  fireEvent.input(editor, { target: { textContent: 'Hello' } });
+  expect(
+    page.container.querySelector('[data-block-id="a"] [data-email-text]'),
+  ).toBe(editor);
+  const selection = window.getSelection()!;
+  const range = window.document.createRange();
+  range.selectNodeContents(editor);
+  range.collapse(false);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  fireEvent.paste(editor, {
+    clipboardData: {
+      getData: (type: string) =>
+        type === 'text/plain' ? '\n<world>' : '<b>world</b>',
+    },
+  });
+  expect(editor.textContent).toBe('Hello\n<world>');
+  expect(editor.querySelector('b')).toBeNull();
+  expect(page.document().versions.ru!.blocks.a).toEqual({
+    type: 'text',
+    text: 'Hello\n<world>',
+  });
+  expect(page.document().versions.uk!.blocks.a).toEqual({
+    type: 'text',
+    text: 'Перший',
+  });
+  expect(page.queryByRole('dialog')).toBeNull();
+});
+
+it.each(['image', 'button'] as const)(
+  'dismisses %s settings outside while preserving fields and resize controls',
+  (type) => {
+    const initial = fixture();
+    if (type === 'button') {
+      initial.sections[0].columns[0].blocks[1] = { id: 'picture', type };
+      initial.versions.ru!.blocks.picture = { type, text: 'Далее', href: '' };
+    }
+    const page = setup(initial);
+    const label = type === 'image' ? 'картинку' : 'кнопку';
+    fireEvent.click(
+      page.getByRole('button', { name: `Редактировать ${label}` }),
+    );
+    const dialog = page.getByRole('dialog');
+    fireEvent.pointerDown(dialog.querySelector('input:not([type="file"])')!);
+    expect(page.getByRole('dialog')).toBe(dialog);
+    fireEvent.pointerDown(
+      page.getByRole('button', {
+        name: `Изменить размер ${type === 'image' ? 'картинки' : 'кнопки'}`,
+      }),
+      { button: 1 },
+    );
+    expect(page.getByRole('dialog')).toBe(dialog);
+    fireEvent.pointerDown(window.document.body);
+    expect(page.queryByRole('dialog')).toBeNull();
+    fireEvent.click(
+      page.getByRole('button', { name: `Редактировать ${label}` }),
+    );
+    expect(page.getByRole('dialog')).toBeTruthy();
+    const text = page.getAllByRole('button', {
+      name: 'Редактировать текст',
+    })[0];
+    fireEvent.pointerDown(text);
+    fireEvent.click(text);
+    expect(page.queryByRole('dialog')).toBeNull();
+    expect(window.document.activeElement?.hasAttribute('data-email-text')).toBe(
+      true,
+    );
+  },
+);

@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 import {
   act,
   cleanup,
@@ -20,6 +19,16 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import ComposerPage from './ComposerPage';
 import { CAMPAIGNS } from '../mocks/campaigns';
 import * as documentRenderer from '../utils/renderEmailDocument';
+
+function inlineText(page: { container: HTMLElement }) {
+  const editors = Array.from(
+    page.container.querySelectorAll<HTMLElement>('[data-email-text]'),
+  );
+  return (
+    editors.find((node) => node === window.document.activeElement) ??
+    editors.at(-1)!
+  );
+}
 
 const showModal = Object.getOwnPropertyDescriptor(
   HTMLDialogElement.prototype,
@@ -55,6 +64,20 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+function addBlockAtEnd(page: ReturnType<typeof render>, label: string) {
+  if (!page.queryByRole('region', { name: 'Секция 1' })) {
+    fireEvent.click(page.getByRole('button', { name: '+ Добавить секцию' }));
+  }
+  const section = within(page.getByRole('region', { name: 'Секция 1' }));
+  const column = within(section.getByRole('group', { name: 'Колонка 1' }));
+  fireEvent.click(
+    column.getByRole('button', {
+      name: /Добавить в (конец колонки|колонку) 1/,
+    }),
+  );
+  fireEvent.click(page.getByRole('button', { name: label }));
+}
+
 function setup() {
   const page = render(
     <MemoryRouter initialEntries={['/admin/distribution/new']}>
@@ -74,10 +97,8 @@ function setup() {
   });
   fireEvent.click(page.getByRole('button', { name: 'Далее: оформление' }));
   fireEvent.click(page.getByRole('button', { name: '+ Добавить секцию' }));
-  fireEvent.click(page.getByRole('button', { name: 'Текст' }));
-  fireEvent.change(page.getByRole('textbox', { name: 'Текст блока' }), {
-    target: { value: 'Привет!' },
-  });
+  addBlockAtEnd(page, 'Текст');
+  fireEvent.input(inlineText(page), { target: { textContent: 'Привет!' } });
   fireEvent.click(page.getByRole('button', { name: 'Назад: письмо' }));
   return page;
 }
@@ -90,9 +111,7 @@ function addUkrainian(page: ReturnType<typeof setup>) {
     target: { value: 'Тема UK' },
   });
   fireEvent.click(page.getByRole('button', { name: 'Далее: оформление' }));
-  fireEvent.change(page.getByRole('textbox', { name: 'Текст блока' }), {
-    target: { value: 'Привіт!' },
-  });
+  fireEvent.input(inlineText(page), { target: { textContent: 'Привіт!' } });
   fireEvent.click(page.getByRole('button', { name: 'Назад: письмо' }));
 }
 
@@ -314,20 +333,20 @@ it('opens the constructor without body text and keeps shared layout with indepen
   });
   expect(page.queryByRole('textbox', { name: 'HTML письма' })).toBeNull();
   fireEvent.click(page.getByRole('button', { name: 'Далее: оформление' }));
-  expect(page.getByText('Начните с текста или картинки')).toBeTruthy();
+  expect(page.getByText('Добавьте первую секцию')).toBeTruthy();
   fireEvent.click(page.getByRole('button', { name: '+ Добавить секцию' }));
-  fireEvent.click(page.getByRole('button', { name: 'Колонки' }));
-  fireEvent.click(page.getByRole('button', { name: '+ Колонка' }));
-  fireEvent.click(page.getByRole('button', { name: '+ Колонка' }));
+  fireEvent.click(page.getByRole('button', { name: 'Настройки секции 1' }));
+  fireEvent.click(page.getByRole('button', { name: '+ Колонка справа' }));
+  fireEvent.click(page.getByRole('button', { name: '+ Колонка справа' }));
   fireEvent.click(page.getByRole('button', { name: 'Закрыть настройки' }));
   const section = within(page.getByRole('region', { name: 'Секция 1' }));
   expect(section.getAllByRole('group', { name: /^Колонка/ })).toHaveLength(3);
   fireEvent.click(
     section.getByRole('button', { name: 'Добавить в колонку 1' }),
   );
-  fireEvent.click(page.getByRole('button', { name: 'Текст' }));
-  fireEvent.change(page.getByRole('textbox', { name: 'Текст блока' }), {
-    target: { value: 'Содержание RU' },
+  addBlockAtEnd(page, 'Текст');
+  fireEvent.input(inlineText(page), {
+    target: { textContent: 'Содержание RU' },
   });
   fireEvent.click(page.getByRole('button', { name: 'Назад: письмо' }));
   const letter = within(page.getByRole('region', { name: 'Письмо' }));
@@ -337,19 +356,11 @@ it('opens the constructor without body text and keeps shared layout with indepen
     target: { value: 'Новий макет' },
   });
   fireEvent.click(page.getByRole('button', { name: 'Далее: оформление' }));
-  expect(
-    (page.getByRole('textbox', { name: 'Текст блока' }) as HTMLTextAreaElement)
-      .value,
-  ).toBe('');
+  expect((inlineText(page) as HTMLElement).textContent).toBe('');
   expect(page.queryByRole('alert')).toBeNull();
-  fireEvent.change(page.getByRole('textbox', { name: 'Текст блока' }), {
-    target: { value: 'Вміст UK' },
-  });
+  fireEvent.input(inlineText(page), { target: { textContent: 'Вміст UK' } });
   fireEvent.click(page.getByRole('tab', { name: /Русский/ }));
-  expect(
-    (page.getByRole('textbox', { name: 'Текст блока' }) as HTMLTextAreaElement)
-      .value,
-  ).toBe('Содержание RU');
+  expect((inlineText(page) as HTMLElement).textContent).toBe('Содержание RU');
   fireEvent.click(page.getByRole('tab', { name: 'На телефоне' }));
   expect(
     page.getByTitle('Письмо на телефоне').getAttribute('srcdoc'),
@@ -368,12 +379,12 @@ it('removes deleted block content from every language after confirmation', async
   fireEvent.click(page.getByRole('button', { name: 'Далее: оформление' }));
   const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
   fireEvent.click(page.getByRole('button', { name: 'Удалить блок текст' }));
-  expect(page.getByRole('textbox', { name: 'Текст блока' })).toBeTruthy();
+  expect(inlineText(page)).toBeTruthy();
   confirm.mockReturnValue(true);
   fireEvent.click(page.getByRole('button', { name: 'Удалить блок текст' }));
-  expect(page.queryByRole('textbox', { name: 'Текст блока' })).toBeNull();
+  expect(page.queryByRole('textbox', { name: 'Текст письма' })).toBeNull();
   fireEvent.click(page.getByRole('tab', { name: /Русский/ }));
-  expect(page.queryByRole('textbox', { name: 'Текст блока' })).toBeNull();
+  expect(page.queryByRole('textbox', { name: 'Текст письма' })).toBeNull();
   fireEvent.click(page.getByRole('button', { name: 'Далее: проверка' }));
   await page.findByText('Просмотрено версий: 1 из 2');
   expect(launchButton(page).disabled).toBe(true);
@@ -388,14 +399,14 @@ it('renders uploaded images and button links through the connected document mode
   vi.spyOn(image, 'readAppearanceImage').mockResolvedValue(src);
   const page = setup();
   fireEvent.click(page.getByRole('button', { name: 'Далее: оформление' }));
-  fireEvent.click(page.getByRole('button', { name: 'Кнопка' }));
+  addBlockAtEnd(page, 'Кнопка');
   fireEvent.change(page.getByRole('textbox', { name: 'Текст кнопки' }), {
     target: { value: 'Открыть предложение' },
   });
   fireEvent.change(page.getByRole('textbox', { name: 'Ссылка' }), {
     target: { value: 'https://example.test/offer' },
   });
-  fireEvent.click(page.getByRole('button', { name: 'Картинка' }));
+  addBlockAtEnd(page, 'Картинка');
   fireEvent.change(page.getByLabelText('Картинка для блока'), {
     target: {
       files: [new File(['image'], 'offer.png', { type: 'image/png' })],
@@ -427,7 +438,7 @@ it('keeps a pending image upload attached to its original language', async () =>
   const page = setup();
   addUkrainian(page);
   fireEvent.click(page.getByRole('button', { name: 'Далее: оформление' }));
-  fireEvent.click(page.getByRole('button', { name: 'Картинка' }));
+  addBlockAtEnd(page, 'Картинка');
   fireEvent.change(page.getByLabelText('Картинка для блока'), {
     target: {
       files: [new File(['image'], 'offer.png', { type: 'image/png' })],
@@ -449,38 +460,4 @@ it('keeps a pending image upload attached to its original language', async () =>
       .querySelector('img')
       ?.getAttribute('src'),
   ).toBe('data:image/png;base64,aGVsbG8=');
-});
-
-it('edits real letter content from the compact toolbar and contextual settings', () => {
-  const page = render(
-    <MemoryRouter>
-      <ComposerPage />
-    </MemoryRouter>,
-  );
-  fireEvent.click(page.getByRole('button', { name: 'Далее: письмо' }));
-  fireEvent.change(page.getByPlaceholderText('Тема на языке: русский'), {
-    target: { value: 'Полотно' },
-  });
-  fireEvent.click(page.getByRole('button', { name: 'Далее: оформление' }));
-  fireEvent.click(page.getByRole('button', { name: 'Текст' }));
-  fireEvent.change(page.getByRole('textbox', { name: 'Текст блока' }), {
-    target: { value: 'Суцільний лист' },
-  });
-  fireEvent.click(page.getByRole('button', { name: 'Закрыть настройки' }));
-  expect(page.queryByRole('textbox', { name: 'Текст блока' })).toBeNull();
-  const block = page.getByRole('button', { name: 'Редактировать текст' });
-  expect(block.textContent).toBe('Суцільний лист');
-  fireEvent.keyDown(block, { key: 'Enter' });
-  expect(
-    (page.getByRole('textbox', { name: 'Текст блока' }) as HTMLTextAreaElement)
-      .value,
-  ).toBe('Суцільний лист');
-  fireEvent.keyDown(page.getByRole('textbox', { name: 'Текст блока' }), {
-    key: 'Escape',
-  });
-  expect(page.queryByRole('dialog')).toBeNull();
-  fireEvent.click(block);
-  expect(
-    page.getByRole('dialog', { name: 'Настройки блока текст' }),
-  ).toBeTruthy();
 });

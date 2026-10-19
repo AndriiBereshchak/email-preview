@@ -1,6 +1,11 @@
 import { renderEmailDocumentContent } from '../../utils/renderEmailDocument';
 import { emptyEmailBlockContent } from '../../utils/emailDocument';
 import {
+  placeEmailBlockBeside,
+  updateEmailBlock,
+} from '../../utils/emailDocumentLayout';
+import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -19,6 +24,8 @@ import type {
 import type { LetterLocale } from '../../utils/localModel';
 import { readAppearanceImage } from '../../utils/appearanceImage';
 import { backgroundImageStyle } from '../../utils/appearanceModel';
+import EmailCanvasControls from './EmailCanvasControls';
+import { Trash2, Upload } from 'lucide-react';
 import { Field } from '../Field';
 import e from './emailBuilder.module.css';
 
@@ -74,17 +81,7 @@ function BlockFields({
       if (id === request.current) setBusy(false);
     }
   };
-  if (content.type === 'text')
-    return (
-      <textarea
-        className={e.textInput}
-        aria-label="Текст блока"
-        placeholder="Напишите текст письма…"
-        rows={4}
-        value={content.text}
-        onChange={(event) => onChange({ ...content, text: event.target.value })}
-      />
-    );
+  if (content.type === 'text') return null;
   if (content.type === 'button')
     return (
       <div className={e.fields}>
@@ -114,6 +111,12 @@ function BlockFields({
   return (
     <div className={e.fields}>
       <label className={e.upload}>
+        <Upload
+          size={16}
+          strokeWidth={1.7}
+          aria-hidden="true"
+          focusable="false"
+        />
         {busy
           ? 'Загружаем…'
           : content.src
@@ -167,6 +170,20 @@ export default function EmailBuilder({
     blockId?: string;
   } | null>(null);
   const [columnsOpen, setColumnsOpen] = useState(false);
+  const [manipulating, setManipulating] = useState(false);
+  const [insertion, setInsertion] = useState<{
+    columnId: string;
+    beforeId?: string;
+    beside?: {
+      anchorId: string;
+      side: 'left' | 'right';
+      anchorWidthPercent?: number;
+    };
+    top: number;
+    left: number;
+  } | null>(null);
+  const insertionMenu = useRef<HTMLDivElement>(null);
+  const insertionTrigger = useRef<HTMLElement | null>(null);
   const [position, setPosition] = useState<{
     top: number;
     left: number;
@@ -178,6 +195,8 @@ export default function EmailBuilder({
   const surface = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLDivElement>(null);
   const popover = useRef<HTMLDivElement>(null);
+  const editingText = useRef<HTMLElement | null>(null);
+  const renderedLocale = useRef(locale);
   const html = useMemo(
     () => renderEmailDocumentContent(document, locale, { editor: true }).html,
     [document, locale],
@@ -185,9 +204,9 @@ export default function EmailBuilder({
   const locations = document.sections.flatMap((section) =>
     section.columns.map((column) => ({ section, column })),
   );
-  const target =
-    locations.find((item) => item.column.id === selection?.columnId) ??
-    locations.at(-1);
+  const target = locations.find(
+    (item) => item.column.id === selection?.columnId,
+  );
   const selectedBlock = target?.column.blocks.find(
     (block) => block.id === selection?.blockId,
   );
@@ -195,12 +214,70 @@ export default function EmailBuilder({
     ? (document.versions[locale]?.blocks[selectedBlock.id] ??
       emptyEmailBlockContent(selectedBlock.type))
     : undefined;
-  const closeSettings = () => {
+  const closePanels = useCallback(() => {
+    setInsertion(null);
     setColumnsOpen(false);
+  }, []);
+  const closeSettings = () => {
+    if (insertion) insertionTrigger.current?.focus();
+    closePanels();
     setSelection((current) =>
       current ? { columnId: current.columnId } : null,
     );
   };
+
+  useEffect(() => {
+    if (
+      !insertion &&
+      !columnsOpen &&
+      (!selectedBlock || selectedBlock.type === 'text')
+    )
+      return;
+    const dismiss = (event: PointerEvent) => {
+      const node = event.target;
+      if (
+        !(node instanceof Element) ||
+        popover.current?.contains(node) ||
+        insertionMenu.current?.contains(node) ||
+        node.closest(`.${e.canvasControls}`)
+      )
+        return;
+      closePanels();
+      setSelection((current) =>
+        current ? { columnId: current.columnId } : null,
+      );
+    };
+    window.document.addEventListener('pointerdown', dismiss, true);
+    return () =>
+      window.document.removeEventListener('pointerdown', dismiss, true);
+  }, [
+    insertion,
+    columnsOpen,
+    selectedBlock?.id,
+    selectedBlock?.type,
+    closePanels,
+  ]);
+
+  useLayoutEffect(() => {
+    const editingId =
+      editingText.current?.closest<HTMLElement>('[data-block-id]')?.dataset
+        .blockId;
+    const stillExists = document.sections.some((section) =>
+      section.columns.some((column) =>
+        column.blocks.some((block) => block.id === editingId),
+      ),
+    );
+    if (
+      stillExists &&
+      editingText.current &&
+      canvas.current?.contains(editingText.current) &&
+      renderedLocale.current === locale
+    )
+      return;
+    editingText.current = null;
+    renderedLocale.current = locale;
+    if (canvas.current) canvas.current.innerHTML = html;
+  }, [html, locale]);
 
   useLayoutEffect(() => {
     const measure = () => {
@@ -250,20 +327,51 @@ export default function EmailBuilder({
   }, [html, selection, columnsOpen, selectedBlock?.id]);
 
   useEffect(() => {
-    if (selectedBlock && !columnsOpen)
+    if (selectedBlock?.type === 'text' && !columnsOpen) {
+      const cell = Array.from(
+        canvas.current?.querySelectorAll<HTMLElement>('[data-block-id]') ?? [],
+      ).find((node) => node.dataset.blockId === selectedBlock.id);
+      cell
+        ?.querySelector<HTMLElement>('[data-email-text]')
+        ?.focus({ preventScroll: true });
+    } else if (selectedBlock && !columnsOpen)
       popover.current
         ?.querySelector<HTMLElement>('textarea,input:not([type="file"])')
         ?.focus();
-  }, [selectedBlock?.id, columnsOpen]);
+  }, [selectedBlock?.id, columnsOpen, locale]);
+
+  useEffect(() => {
+    if (insertion)
+      insertionMenu.current
+        ?.querySelector<HTMLButtonElement>('button[data-block-type]')
+        ?.focus();
+  }, [insertion]);
 
   const selectFromCanvas = (
     event: MouseEvent<HTMLDivElement> | KeyboardEvent<HTMLDivElement>,
   ) => {
-    if ('key' in event && event.key !== 'Enter' && event.key !== ' ') return;
     const node = event.target as HTMLElement;
+    if ('key' in event && node.closest('[data-email-text]')) return;
+    if ('key' in event && event.key !== 'Enter' && event.key !== ' ') return;
     const column = node.closest<HTMLElement>('[data-column-id]');
     if (!column || !canvas.current?.contains(column)) return;
-    event.preventDefault();
+    if (!node.closest('[data-email-text]')) event.preventDefault();
+    const add = node.closest<HTMLElement>('[data-add-column-id]');
+    if (add && surface.current) {
+      const host = surface.current.getBoundingClientRect();
+      const rect = add.getBoundingClientRect();
+      insertionTrigger.current = add;
+      setInsertion({
+        columnId: add.dataset.addColumnId!,
+        beforeId: add.dataset.beforeBlockId,
+        top: rect.bottom - host.top + 8,
+        left: Math.max(0, Math.min(rect.left - host.left, host.width - 256)),
+      });
+      setSelection({ columnId: add.dataset.addColumnId! });
+      setColumnsOpen(false);
+      return;
+    }
+    setInsertion(null);
     const block = node.closest<HTMLElement>('[data-block-id]');
     setSelection({
       columnId: column.dataset.columnId!,
@@ -273,7 +381,7 @@ export default function EmailBuilder({
   };
 
   const addSection = () => {
-    setColumnsOpen(false);
+    closePanels();
     const sectionId = crypto.randomUUID();
     const columnId = crypto.randomUUID();
     setSelection({ columnId });
@@ -286,6 +394,7 @@ export default function EmailBuilder({
     }));
   };
   const addColumn = (sectionId: string) => {
+    setInsertion(null);
     const id = crypto.randomUUID();
     setSelection({ columnId: id });
     onChange((current) => ({
@@ -298,29 +407,39 @@ export default function EmailBuilder({
     }));
   };
   const addBlock = (type: EmailBlock['type']) => {
+    if (!insertion) return;
+    const { columnId, beforeId } = insertion;
     const id = crypto.randomUUID();
-    const columnId = target?.column.id ?? crypto.randomUUID();
-    const sectionId = crypto.randomUUID();
     setSelection({ columnId, blockId: id });
-    setColumnsOpen(false);
-    onChange((current) => ({
-      ...current,
-      sections: target
-        ? current.sections.map((section) => ({
-            ...section,
-            columns: section.columns.map((column) =>
-              column.id === columnId
-                ? { ...column, blocks: [...column.blocks, { id, type }] }
-                : column,
-            ),
-          }))
-        : [
-            {
-              id: sectionId,
-              columns: [{ id: columnId, blocks: [{ id, type }] }],
-            },
-          ],
-    }));
+    closePanels();
+    onChange((current) =>
+      insertion.beside
+        ? placeEmailBlockBeside(
+            current,
+            columnId,
+            insertion.beside.anchorId,
+            { id, type },
+            insertion.beside.side,
+            crypto.randomUUID(),
+            insertion.beside.anchorWidthPercent,
+          )
+        : {
+            ...current,
+            sections: current.sections.map((section) => ({
+              ...section,
+              columns: section.columns.map((column) => {
+                if (column.id !== columnId) return column;
+                const index = beforeId
+                  ? column.blocks.findIndex((block) => block.id === beforeId)
+                  : column.blocks.length;
+                if (index < 0) return column;
+                const blocks = [...column.blocks];
+                blocks.splice(index, 0, { id, type });
+                return { ...column, blocks };
+              }),
+            })),
+          },
+    );
   };
   const updateContent = (
     id: string,
@@ -345,6 +464,15 @@ export default function EmailBuilder({
           },
         },
       };
+    });
+  };
+  const updateInlineText = (node: HTMLElement) => {
+    const id = node.closest<HTMLElement>('[data-block-id]')?.dataset.blockId;
+    if (!id) return;
+    editingText.current = node;
+    updateContent(id, locale, {
+      type: 'text',
+      text: node.innerText ?? node.textContent ?? '',
     });
   };
   const confirmRemoval = (ids: string[], name: string) => {
@@ -372,8 +500,8 @@ export default function EmailBuilder({
       column.blocks.map((block) => block.id),
     );
     if (!confirmRemoval(ids, 'эту секцию')) return;
+    closePanels();
     setSelection(null);
-    setColumnsOpen(false);
     onChange((current) => ({
       ...current,
       sections: current.sections.filter((section) => section.id !== id),
@@ -421,39 +549,13 @@ export default function EmailBuilder({
         if (event.key === 'Escape') closeSettings();
       }}
     >
-      <div className={e.toolbar} role="toolbar" aria-label="Добавить в письмо">
-        <button type="button" onClick={() => addBlock('text')}>
-          <span aria-hidden="true">T</span>Текст
-        </button>
-        <button type="button" onClick={() => addBlock('image')}>
-          <span aria-hidden="true">▧</span>Картинка
-        </button>
-        <button type="button" onClick={() => addBlock('button')}>
-          <span aria-hidden="true">↗</span>Кнопка
-        </button>
-        <span className={e.divider} />
-        <button type="button" onClick={addSection}>
-          + Секция
-        </button>
-        <button
-          type="button"
-          disabled={!target}
-          aria-expanded={columnsOpen}
-          onClick={() => {
-            if (target) setSelection({ columnId: target.column.id });
-            setColumnsOpen((open) => !open);
-          }}
-        >
-          <span aria-hidden="true">▥</span>Колонки
-        </button>
-      </div>
       <div
         ref={surface}
         className={e.surface}
         onPointerDown={(event) => {
           if (event.target === event.currentTarget) {
             setSelection(null);
-            setColumnsOpen(false);
+            closePanels();
           }
         }}
       >
@@ -471,120 +573,307 @@ export default function EmailBuilder({
           }}
         >
           {!document.sections.length ? (
-            <div className={e.empty}>
+            <button
+              type="button"
+              className={e.empty}
+              onClick={addSection}
+              aria-label="+ Добавить секцию"
+            >
               <span aria-hidden="true">＋</span>
-              <h4>Начните с текста или картинки</h4>
-              <p>Выберите элемент на панели сверху — он появится в письме.</p>
-            </div>
+              <strong>Добавьте первую секцию</strong>
+              <span className={e.emptyHelp}>
+                Текст, картинки и кнопки можно добавить внутри секции.
+              </span>
+            </button>
           ) : (
             <div
               ref={canvas}
               className={e.canvas}
               onClick={selectFromCanvas}
               onKeyDown={selectFromCanvas}
-              dangerouslySetInnerHTML={{ __html: html }}
+              onFocus={(event) => {
+                const node = (event.target as HTMLElement).closest<HTMLElement>(
+                  '[data-email-text]',
+                );
+                if (node) editingText.current = node;
+              }}
+              onInput={(event) => {
+                const node = (event.target as HTMLElement).closest<HTMLElement>(
+                  '[data-email-text]',
+                );
+                if (node) updateInlineText(node);
+              }}
+              onBlur={() => {
+                editingText.current = null;
+              }}
+              onPaste={(event) => {
+                const node = (event.target as HTMLElement).closest<HTMLElement>(
+                  '[data-email-text]',
+                );
+                if (!node) return;
+                event.preventDefault();
+                const selection = window.getSelection();
+                if (
+                  !selection?.rangeCount ||
+                  !node.contains(selection.anchorNode)
+                )
+                  return;
+                const range = selection.getRangeAt(0);
+                range.deleteContents();
+                const text = window.document.createTextNode(
+                  event.clipboardData.getData('text/plain'),
+                );
+                range.insertNode(text);
+                range.setStartAfter(text);
+                range.collapse(true);
+                selection.removeAllRanges();
+                selection.addRange(range);
+                updateInlineText(node);
+              }}
             />
           )}
         </div>
-        {selection && position && (
-          <div
-            aria-hidden="true"
-            className={e.selection}
-            style={{
-              top: position.top,
-              left: position.left,
-              width: position.width,
-              height: position.height,
-            }}
-          />
-        )}
-        {(selectedBlock || columnsOpen) && target && (
-          <div
-            ref={popover}
-            className={e.popover}
-            role="dialog"
-            aria-label={
-              columnsOpen
-                ? 'Колонки секции'
-                : `Настройки блока ${labels[selectedBlock!.type].toLowerCase()}`
+        {selection &&
+          position &&
+          (selectedBlock || columnsOpen || insertion) && (
+            <div
+              aria-hidden="true"
+              className={e.selection}
+              style={{
+                top: position.top,
+                left: position.left,
+                width: position.width,
+                height: position.height,
+              }}
+            />
+          )}
+        <EmailCanvasControls
+          document={document}
+          canvas={canvas}
+          surface={surface}
+          columnId={selection?.columnId}
+          blockId={columnsOpen ? undefined : selectedBlock?.id}
+          onChange={onChange}
+          onOpenSection={(id) => {
+            const section = document.sections.find(
+              (section) => section.id === id,
+            );
+            if (!section) return;
+            setInsertion(null);
+            setSelection({ columnId: section.columns[0].id });
+            setColumnsOpen(true);
+          }}
+          onDeleteSection={deleteSection}
+          onDeleteBlock={deleteBlock}
+          onAddBeside={(
+            columnId,
+            anchorId,
+            side,
+            button,
+            anchorWidthPercent,
+          ) => {
+            if (!surface.current) return;
+            const host = surface.current.getBoundingClientRect();
+            const rect = button.getBoundingClientRect();
+            insertionTrigger.current = button;
+            setInsertion({
+              columnId,
+              beside: { anchorId, side, anchorWidthPercent },
+              top: rect.bottom - host.top + 8,
+              left: Math.max(
+                0,
+                Math.min(rect.left - host.left, host.width - 256),
+              ),
+            });
+            setSelection({ columnId });
+            setColumnsOpen(false);
+          }}
+          onInteractionChange={(active) => {
+            setManipulating(active);
+            if (active) {
+              editingText.current?.blur();
+              editingText.current = null;
+              setInsertion(null);
             }
-            style={{
-              top: position?.panelTop ?? 16,
-              left: position?.panelLeft ?? 16,
-            }}
+          }}
+          onSelect={(columnId, blockId) => {
+            closePanels();
+            setSelection({ columnId, blockId });
+          }}
+        />
+        {insertion && !manipulating && (
+          <div
+            ref={insertionMenu}
+            className={`${e.popover} ${e.insertMenu}`}
+            role="dialog"
+            aria-label="Добавить блок"
+            style={{ top: insertion.top, left: insertion.left }}
           >
             <div className={e.popoverHead}>
-              <strong>
-                {columnsOpen ? 'Колонки' : labels[selectedBlock!.type]}
-              </strong>
+              <strong>Добавить блок здесь</strong>
               <button
                 type="button"
-                aria-label="Закрыть настройки"
+                aria-label="Закрыть выбор блока"
                 onClick={closeSettings}
               >
                 ×
               </button>
             </div>
-            {columnsOpen ? (
-              <div className={e.columnSettings}>
-                {target.section.columns.map((column, index) => (
-                  <div className={e.columnRow} key={column.id}>
-                    <button
-                      type="button"
-                      aria-pressed={column.id === target.column.id}
-                      onClick={() => setSelection({ columnId: column.id })}
-                    >
-                      Колонка {index + 1}
-                    </button>
-                    {target.section.columns.length > 1 && (
-                      <button
-                        type="button"
-                        aria-label={`Удалить колонку ${index + 1}`}
-                        onClick={() => deleteColumn(column.id)}
-                      >
-                        ×
-                      </button>
-                    )}
-                  </div>
-                ))}
+            <div className={e.insertChoices}>
+              {(['text', 'image', 'button'] as const).map((type) => (
                 <button
                   type="button"
-                  className={e.addColumn}
-                  onClick={() => addColumn(target.section.id)}
+                  key={type}
+                  data-block-type={type}
+                  onClick={() => addBlock(type)}
                 >
-                  + Колонка
+                  {labels[type]}
                 </button>
-                <button
-                  type="button"
-                  className={e.removeSection}
-                  onClick={() => deleteSection(target.section.id)}
-                >
-                  Удалить секцию
-                </button>
-              </div>
-            ) : (
-              <>
-                <BlockFields
-                  content={selectedContent!}
-                  onChange={(value) =>
-                    updateContent(selectedBlock!.id, locale, value)
-                  }
-                />
-                <button
-                  type="button"
-                  className={e.removeBlockInPanel}
-                  aria-label={`Удалить блок ${labels[selectedBlock!.type].toLowerCase()}`}
-                  onClick={() => deleteBlock(selectedBlock!.id)}
-                >
-                  Удалить блок
-                </button>
-              </>
-            )}
+              ))}
+            </div>
           </div>
         )}
-        <button type="button" className={e.addSection} onClick={addSection}>
-          + Добавить секцию
-        </button>
+        {!insertion &&
+          !manipulating &&
+          ((selectedBlock && selectedBlock.type !== 'text') || columnsOpen) &&
+          target && (
+            <div
+              ref={popover}
+              className={e.popover}
+              role="dialog"
+              aria-label={
+                columnsOpen
+                  ? 'Колонки секции'
+                  : `Настройки блока ${labels[selectedBlock!.type].toLowerCase()}`
+              }
+              style={{
+                top: position?.panelTop ?? 16,
+                left: position?.panelLeft ?? 16,
+              }}
+            >
+              <div className={e.popoverHead}>
+                <strong>
+                  {columnsOpen ? 'Колонки' : labels[selectedBlock!.type]}
+                </strong>
+                <button
+                  type="button"
+                  aria-label="Закрыть настройки"
+                  onClick={closeSettings}
+                >
+                  ×
+                </button>
+              </div>
+              {columnsOpen ? (
+                <div className={e.columnSettings}>
+                  {target.section.columns.map((column, index) => (
+                    <div className={e.columnRow} key={column.id}>
+                      <button
+                        type="button"
+                        aria-pressed={column.id === target.column.id}
+                        onClick={() => setSelection({ columnId: column.id })}
+                      >
+                        Колонка {index + 1}
+                      </button>
+                      {target.section.columns.length > 1 && (
+                        <button
+                          type="button"
+                          aria-label={`Удалить колонку ${index + 1}`}
+                          onClick={() => deleteColumn(column.id)}
+                        >
+                          <Trash2
+                            size={16}
+                            strokeWidth={1.7}
+                            aria-hidden="true"
+                            focusable="false"
+                          />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className={e.addColumn}
+                    onClick={() => addColumn(target.section.id)}
+                  >
+                    + Колонка справа
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {(selectedBlock?.type === 'image' ||
+                    selectedBlock?.type === 'button') && (
+                    <div
+                      className={e.imageAlignment}
+                      role="group"
+                      aria-label={
+                        selectedBlock.type === 'image'
+                          ? 'Расположение картинки'
+                          : 'Расположение кнопки'
+                      }
+                    >
+                      {(['left', 'center', 'right'] as const).map(
+                        (alignment, index) => (
+                          <button
+                            type="button"
+                            key={alignment}
+                            aria-pressed={
+                              (selectedBlock.alignment ?? 'left') === alignment
+                            }
+                            onClick={() =>
+                              onChange((current) =>
+                                updateEmailBlock(
+                                  current,
+                                  selectedBlock.id,
+                                  (block) =>
+                                    block.type === 'image' ||
+                                    block.type === 'button'
+                                      ? {
+                                          ...block,
+                                          alignment,
+                                          ...(block.type === 'image'
+                                            ? { offsetPercent: undefined }
+                                            : { insetPercent: undefined }),
+                                        }
+                                      : block,
+                                ),
+                              )
+                            }
+                          >
+                            {['Слева', 'По центру', 'Справа'][index]}
+                          </button>
+                        ),
+                      )}
+                    </div>
+                  )}
+                  <BlockFields
+                    content={selectedContent!}
+                    onChange={(value) =>
+                      updateContent(selectedBlock!.id, locale, value)
+                    }
+                  />
+                  <button
+                    type="button"
+                    className={e.removeBlockInPanel}
+                    title="Удалить блок"
+                    aria-label={`Удалить блок ${labels[selectedBlock!.type].toLowerCase()}`}
+                    onClick={() => deleteBlock(selectedBlock!.id)}
+                  >
+                    <Trash2
+                      size={16}
+                      strokeWidth={1.7}
+                      aria-hidden="true"
+                      focusable="false"
+                    />
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        {document.sections.length > 0 && (
+          <button type="button" className={e.addSection} onClick={addSection}>
+            + Добавить секцию
+          </button>
+        )}
       </div>
     </div>
   );

@@ -409,3 +409,70 @@ it('checks version readiness directly from placed blocks without generating HTML
   letter.sections[0].columns[0].blocks = [];
   expect(emailVersionProblem(letter, 'en')).toBe('заполните письмо');
 });
+
+it('inherits only images from the primary language and respects local replacements', () => {
+  const doc = createEmailDocument(['ru', 'uk', 'en']);
+  doc.sections = [
+    {
+      id: 's',
+      columns: [
+        {
+          id: 'c',
+          blocks: [
+            { id: 'image', type: 'image' },
+            { id: 'text', type: 'text' },
+            { id: 'button', type: 'button' },
+          ],
+        },
+      ],
+    },
+  ];
+  doc.versions.ru = {
+    subject: 'RU',
+    preheader: '',
+    blocks: {
+      image: {
+        type: 'image',
+        src: 'https://example.test/original.png',
+        alt: 'Original',
+      },
+      text: { type: 'text', text: 'Only Russian' },
+      button: {
+        type: 'button',
+        text: 'Russian button',
+        href: 'https://example.test',
+      },
+    },
+  };
+  doc.versions.uk!.subject = 'UK';
+  expect(emailVersionProblem(doc, 'uk')).toBeNull();
+  let html = renderEmailDocument(doc, 'uk').html;
+  expect(html).toContain('original.png');
+  expect(html).not.toContain('Only Russian');
+  expect(html).not.toContain('Russian button');
+  doc.versions.uk!.blocks.image = {
+    type: 'image',
+    src: 'https://example.test/uk.png',
+    alt: 'UK',
+  };
+  doc.versions.ru!.blocks.image = {
+    type: 'image',
+    src: 'https://example.test/new.png',
+    alt: 'New',
+  };
+  expect(renderEmailDocument(doc, 'uk').html).toContain('/uk.png');
+  expect(renderEmailDocument(doc, 'en').html).toContain('/new.png');
+  doc.versions.uk!.blocks.image = { type: 'image', src: '', alt: 'Опис' };
+  html = renderEmailDocument(doc, 'uk').html;
+  expect(html).toContain('/new.png');
+  expect(html).toContain('alt="Опис"');
+  doc.defaultLocale = 'uk';
+  expect(renderEmailDocument(doc, 'en').html).not.toContain('/new.png');
+  doc.versions.uk!.blocks.image = {
+    type: 'image',
+    src: 'https://example.test/primary.png',
+    alt: '',
+  };
+  expect(renderEmailDocument(doc, 'en').html).toContain('/primary.png');
+  expect(renderEmailDocument(doc, 'ru').html).toContain('/new.png');
+});

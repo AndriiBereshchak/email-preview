@@ -1,5 +1,9 @@
 import { renderEmailDocumentContent } from '../../utils/renderEmailDocument';
-import { emptyEmailBlockContent } from '../../utils/emailDocument';
+import {
+  emailBlockContent,
+  emailDefaultLocale,
+  emptyEmailBlockContent,
+} from '../../utils/emailDocument';
 import {
   placeEmailBlockBeside,
   updateEmailBlock,
@@ -65,9 +69,13 @@ function removeContent(
 
 function BlockFields({
   content,
+  inherited = false,
+  onResetImage,
   onChange,
 }: {
   content: EmailBlockContent;
+  inherited?: boolean;
+  onResetImage?: () => void;
   onChange: (value: EmailBlockContent) => void;
 }) {
   const {
@@ -129,6 +137,21 @@ function BlockFields({
           }}
         />
       </label>
+      {inherited && (
+        <p className={e.fieldHint}>
+          Картинка из основной версии. Замена изменит только эту версию.
+        </p>
+      )}
+      {onResetImage && (
+        <button
+          type="button"
+          className={e.addColumn}
+          disabled={busy}
+          onClick={onResetImage}
+        >
+          Использовать картинку основной версии
+        </button>
+      )}
       {content.src && (
         <Field label="Описание картинки">
           <input
@@ -137,7 +160,11 @@ function BlockFields({
             value={content.alt}
             placeholder="Что изображено на картинке"
             onChange={(event) =>
-              onChange({ ...content, alt: event.target.value })
+              onChange({
+                ...content,
+                src: inherited ? '' : content.src,
+                alt: event.target.value,
+              })
             }
           />
         </Field>
@@ -200,7 +227,14 @@ export default function EmailBuilder({
   const renderedLocale = useRef(locale);
   const html = useMemo(
     () => renderEmailDocumentContent(document, locale, { editor: true }).html,
-    [document.sections, document.appearance, document.versions[locale], locale],
+    [
+      document.sections,
+      document.appearance,
+      document.versions[locale],
+      document.versions[emailDefaultLocale(document)],
+      document.defaultLocale,
+      locale,
+    ],
   );
   const locations = document.sections.flatMap((section) =>
     section.columns.map((column) => ({ section, column })),
@@ -212,9 +246,25 @@ export default function EmailBuilder({
     (block) => block.id === selection?.blockId,
   );
   const selectedContent = selectedBlock
-    ? (document.versions[locale]?.blocks[selectedBlock.id] ??
+    ? (emailBlockContent(document, locale, selectedBlock) ??
       emptyEmailBlockContent(selectedBlock.type))
     : undefined;
+  const ownContent = selectedBlock
+    ? document.versions[locale]?.blocks[selectedBlock.id]
+    : undefined;
+  const baseContent = selectedBlock
+    ? document.versions[emailDefaultLocale(document)]?.blocks[selectedBlock.id]
+    : undefined;
+  const inheritedImage =
+    selectedContent?.type === 'image' &&
+    !!selectedContent.src &&
+    !(ownContent?.type === 'image' && ownContent.src);
+  const canResetImage =
+    locale !== emailDefaultLocale(document) &&
+    ownContent?.type === 'image' &&
+    !!ownContent.src &&
+    baseContent?.type === 'image' &&
+    !!baseContent.src;
   const settingsVisible = Boolean(
     !insertion &&
     target &&
@@ -1034,6 +1084,18 @@ export default function EmailBuilder({
             <>
               <BlockFields
                 content={selectedContent!}
+                inherited={inheritedImage}
+                onResetImage={
+                  canResetImage
+                    ? () =>
+                        updateContent(selectedBlock!.id, locale, {
+                          type: 'image',
+                          src: '',
+                          alt:
+                            ownContent?.type === 'image' ? ownContent.alt : '',
+                        })
+                    : undefined
+                }
                 onChange={(value) =>
                   updateContent(selectedBlock!.id, locale, value)
                 }

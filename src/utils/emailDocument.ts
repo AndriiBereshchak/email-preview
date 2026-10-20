@@ -64,6 +64,7 @@ export interface EmailDocumentVersion {
   blocks: Record<string, EmailBlockContent>;
 }
 export interface EmailDocument {
+  defaultLocale?: LetterLocale;
   appearance: EmailAppearance;
   sections: EmailSection[];
   versions: Partial<Record<LetterLocale, EmailDocumentVersion>>;
@@ -76,6 +77,7 @@ export function createEmailDocument(
   for (const locale of locales)
     versions[locale] = { subject: '', preheader: '', blocks: {} };
   return {
+    defaultLocale: locales[0],
     appearance: { ...DEFAULT_APPEARANCE },
     sections: [],
     versions,
@@ -99,7 +101,7 @@ export function emailVersionProblem(
   const filled = document.sections.some((section) =>
     section.columns.some((column) =>
       column.blocks.some((block) => {
-        const content = version.blocks[block.id];
+        const content = emailBlockContent(document, locale, block);
         if (!content || content.type !== block.type) return false;
         return content.type === 'image'
           ? !!emailImageUrl(content.src)
@@ -108,4 +110,23 @@ export function emailVersionProblem(
     ),
   );
   return filled ? null : 'заполните письмо';
+}
+
+export function emailDefaultLocale(document: EmailDocument): LetterLocale {
+  return document.defaultLocale && document.versions[document.defaultLocale]
+    ? document.defaultLocale
+    : (Object.keys(document.versions)[0] as LetterLocale);
+}
+
+export function emailBlockContent(
+  document: EmailDocument,
+  locale: LetterLocale,
+  block: EmailBlock,
+): EmailBlockContent | undefined {
+  const own = document.versions[locale]?.blocks[block.id];
+  if (block.type !== 'image' || (own?.type === 'image' && own.src)) return own;
+  const base =
+    document.versions[emailDefaultLocale(document)]?.blocks[block.id];
+  if (base?.type !== 'image') return own;
+  return { ...base, alt: own?.type === 'image' ? own.alt : base.alt };
 }

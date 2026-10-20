@@ -486,3 +486,67 @@ it('renders only the active editor while typing and does not parse generated HTM
   expect(renderer.mock.calls[0][2]).toEqual({ editor: true });
   expect(parser).not.toHaveBeenCalled();
 });
+
+it('shares primary images, preserves translated replacements and restores inheritance through the UI', async () => {
+  const image = await import('../utils/appearanceImage');
+  const original = 'data:image/png;base64,b3JpZ2luYWw=';
+  const translated = 'data:image/png;base64,dHJhbnNsYXRlZA==';
+  const updated = 'data:image/png;base64,dXBkYXRlZA==';
+  vi.spyOn(image, 'readAppearanceImage')
+    .mockResolvedValueOnce(original)
+    .mockResolvedValueOnce(translated)
+    .mockResolvedValueOnce(updated);
+  const page = setup();
+  addUkrainian(page);
+  fireEvent.click(page.getByRole('button', { name: 'Далее: оформление' }));
+  fireEvent.click(page.getByRole('tab', { name: /Русский/ }));
+  addBlockAtEnd(page, 'Картинка');
+  const upload = () =>
+    fireEvent.change(page.getByLabelText('Картинка для блока'), {
+      target: {
+        files: [new File(['image'], 'banner.png', { type: 'image/png' })],
+      },
+    });
+  const source = () =>
+    page
+      .getByRole('button', { name: 'Редактировать картинку' })
+      .querySelector('img')
+      ?.getAttribute('src');
+  upload();
+  await waitFor(() => expect(source()).toBe(original));
+  fireEvent.click(page.getByRole('tab', { name: /Украинский/ }));
+  expect(source()).toBe(original);
+  fireEvent.change(page.getByRole('textbox', { name: 'Описание картинки' }), {
+    target: { value: 'Український опис' },
+  });
+  upload();
+  await waitFor(() => expect(source()).toBe(translated));
+  fireEvent.click(page.getByRole('tab', { name: /Русский/ }));
+  expect(source()).toBe(original);
+  upload();
+  await waitFor(() => expect(source()).toBe(updated));
+  fireEvent.click(page.getByRole('tab', { name: /Украинский/ }));
+  expect(source()).toBe(translated);
+  fireEvent.click(
+    page.getByRole('button', { name: 'Использовать картинку основной версии' }),
+  );
+  expect(source()).toBe(updated);
+  expect(
+    (
+      page.getByRole('textbox', {
+        name: 'Описание картинки',
+      }) as HTMLInputElement
+    ).value,
+  ).toBe('Український опис');
+  openReview(page);
+  await page.findByText('Просмотрено версий: 1 из 2');
+  expect(
+    page.getByTitle('Предпросмотр письма').getAttribute('srcdoc'),
+  ).toContain(updated);
+  expect(
+    page.getByTitle('Предпросмотр письма').getAttribute('srcdoc'),
+  ).toContain('Привіт!');
+  expect(
+    page.getByTitle('Предпросмотр письма').getAttribute('srcdoc'),
+  ).not.toContain('Привет!');
+});

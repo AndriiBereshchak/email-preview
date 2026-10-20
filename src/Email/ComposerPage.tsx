@@ -1,6 +1,9 @@
 import DesignStep from './Composer/DesignStep';
 import { useMemo, useState } from 'react';
-import { emailVersionProblem } from '../utils/emailDocument';
+import {
+  emailVersionProblem,
+  emailDefaultLocale,
+} from '../utils/emailDocument';
 import { useEmailDocument } from '../hooks/useEmailDocument';
 import { useEmailImageResources } from '../hooks/useEmailImageResources';
 import type { EmailAppearance } from '../utils/appearanceModel';
@@ -57,7 +60,9 @@ const ComposerPage = () => {
       })),
     [document.versions],
   );
-  const [defaultLocale, setDefaultLocale] = useState<LetterLocale>('ru');
+  const defaultLocale = emailDefaultLocale(document);
+  const setDefaultLocale = (locale: LetterLocale) =>
+    setDocument((current) => ({ ...current, defaultLocale: locale }));
   const [activeLocale, setActiveLocale] = useState<LetterLocale>('ru');
   const appearance = document.appearance;
   const setAppearance = (value: EmailAppearance) =>
@@ -146,9 +151,13 @@ const ComposerPage = () => {
     setDocument((current) => {
       const versions = { ...current.versions };
       delete versions[locale];
-      return { ...current, versions };
+      return {
+        ...current,
+        versions,
+        defaultLocale:
+          defaultLocale === locale ? rest[0].locale : defaultLocale,
+      };
     });
-    if (defaultLocale === locale) setDefaultLocale(rest[0].locale);
     if (activeLocale === locale) setActiveLocale(rest[0].locale);
   };
 

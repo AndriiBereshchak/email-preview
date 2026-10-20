@@ -48,3 +48,55 @@ it('invalidates only edited translations, all shared layouts, and re-added langu
   update((d) => d);
   expect(result.current).toBe(unchanged);
 });
+
+it('invalidates inherited image previews while keeping independent replacements fresh', () => {
+  const { result } = renderHook(useEmailDocument);
+  act(() =>
+    result.current.setDocument((d) => ({
+      ...d,
+      sections: [
+        {
+          id: 's',
+          columns: [{ id: 'c', blocks: [{ id: 'i', type: 'image' }] }],
+        },
+      ],
+      versions: {
+        ru: {
+          subject: 'RU',
+          preheader: '',
+          blocks: {
+            i: { type: 'image', src: 'https://example.test/a.png', alt: '' },
+          },
+        },
+        uk: { subject: 'UK', preheader: '', blocks: {} },
+        en: {
+          subject: 'EN',
+          preheader: '',
+          blocks: {
+            i: { type: 'image', src: 'https://example.test/en.png', alt: '' },
+          },
+        },
+      },
+    })),
+  );
+  const before = result.current.revisions;
+  act(() =>
+    result.current.setDocument((d) => ({
+      ...d,
+      versions: {
+        ...d.versions,
+        ru: {
+          ...d.versions.ru!,
+          blocks: {
+            i: { type: 'image', src: 'https://example.test/b.png', alt: '' },
+          },
+        },
+      },
+    })),
+  );
+  expect(result.current.revisions.uk).toBeGreaterThan(before.uk);
+  expect(result.current.revisions.en).toBe(before.en);
+  const updated = result.current.revisions;
+  act(() => result.current.setDocument((d) => ({ ...d, defaultLocale: 'en' })));
+  expect(result.current.revisions.uk).toBeGreaterThan(updated.uk);
+});

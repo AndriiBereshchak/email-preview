@@ -1,4 +1,4 @@
-import { emptyEmailBlockContent } from './emailDocument';
+import { emailBlockContent, emptyEmailBlockContent } from './emailDocument';
 import { emailTextHtml } from './emailText';
 import { emailBlockRows } from './emailDocumentLayout';
 import { emailImageUrl } from './appearanceImage';
@@ -41,14 +41,9 @@ export function renderEmailDocumentContent(
     inline = false,
     imageMaxWidth?: number,
   ): string => {
-    const content: EmailBlockContent | undefined = Object.hasOwn(
-      version.blocks,
-      block.id,
-    )
-      ? version.blocks[block.id]
-      : options.editor
-        ? emptyEmailBlockContent(block.type)
-        : undefined;
+    const content: EmailBlockContent | undefined =
+      emailBlockContent(document, locale, block) ??
+      (options.editor ? emptyEmailBlockContent(block.type) : undefined);
     if (!content || content.type !== block.type) return '';
     const alignment = block.alignment ?? 'left';
     let html = '';

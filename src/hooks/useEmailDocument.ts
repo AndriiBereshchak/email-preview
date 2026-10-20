@@ -6,6 +6,8 @@ import {
 } from 'react';
 import {
   createEmailDocument,
+  emailBlockContent,
+  emailDefaultLocale,
   type EmailDocument,
 } from '../utils/emailDocument';
 
@@ -22,11 +24,32 @@ export function useEmailDocument() {
         if (document === current.document) return current;
         const sharedChanged =
           document.sections !== current.document.sections ||
-          document.appearance !== current.document.appearance;
+          document.appearance !== current.document.appearance ||
+          emailDefaultLocale(document) !== emailDefaultLocale(current.document);
+        const images = document.sections.flatMap((section) =>
+          section.columns.flatMap((column) =>
+            column.blocks.filter((block) => block.type === 'image'),
+          ),
+        );
         const revisions = { ...current.revisions };
         for (const [locale, version] of Object.entries(document.versions)) {
           if (
             sharedChanged ||
+            images.some((block) => {
+              const before = emailBlockContent(
+                current.document,
+                locale as keyof typeof document.versions,
+                block,
+              );
+              const after = emailBlockContent(
+                document,
+                locale as keyof typeof document.versions,
+                block,
+              );
+              return before?.type === 'image' && after?.type === 'image'
+                ? before.src !== after.src || before.alt !== after.alt
+                : before?.type !== after?.type;
+            }) ||
             version !==
               current.document.versions[
                 locale as keyof typeof document.versions

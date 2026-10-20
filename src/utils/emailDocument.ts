@@ -6,7 +6,6 @@ export type EmailBlock = (
   | {
       id: string;
       type: 'text';
-      alignment?: EmailAlignment;
       variant?: 'body' | 'heading';
     }
   | {
@@ -43,12 +42,11 @@ export interface EmailSection {
   minHeight?: number;
   borderColor?: string;
   borderRadius?: number;
-  verticalAlignment?: 'top' | 'middle' | 'bottom';
   columns: EmailColumn[];
 }
 export type EmailBlockContent =
   | { type: 'text'; text: string }
-  | { type: 'image'; src: string; alt: string; href?: string }
+  | { type: 'image'; src: string; alt: string }
   | { type: 'button'; text: string; href: string };
 
 export interface EmailDocumentVersion {

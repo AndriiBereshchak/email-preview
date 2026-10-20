@@ -45,7 +45,6 @@ function fixture(): EmailDocument {
         type: 'image',
         src: 'https://example.test/uk.png',
         alt: 'Ілюстрація',
-        href: 'https://example.test/uk',
       },
     },
   };
@@ -133,7 +132,7 @@ describe('email document renderer', () => {
     expect(en.html).toContain('https://example.test/en.png');
     expect(en.html).not.toContain('Заголовок');
     expect(uk.text).toBe(
-      'Заголовок\n\nПерший рядок\nДругий рядок\n\nПочати — https://example.test/uk?a=1&b=2\n\nІлюстрація — https://example.test/uk',
+      'Заголовок\n\nПерший рядок\nДругий рядок\n\nПочати — https://example.test/uk?a=1&b=2\n\nІлюстрація',
     );
     expect(JSON.stringify(document)).toBe(saved);
   });

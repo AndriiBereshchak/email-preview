@@ -45,8 +45,8 @@ export function renderEmailDocumentContent(
         ? emptyEmailBlockContent(block.type)
         : undefined;
     if (!content || content.type !== block.type) return '';
-    const alignment = block.alignment ?? 'left';
-    const placeholder = `<span class="email-editor-placeholder">${block.type === 'text' ? 'Нажмите, чтобы написать текст' : block.type === 'image' ? 'Нажмите, чтобы загрузить картинку' : 'Текст кнопки'}</span>`;
+    const alignment =
+      block.type === 'text' ? 'left' : (block.alignment ?? 'left');
     let html = '';
 
     if (block.type === 'text' && content.type === 'text') {
@@ -66,7 +66,6 @@ export function renderEmailDocumentContent(
       plain.push(content.text);
     } else if (block.type === 'image' && content.type === 'image') {
       const src = emailImageUrl(content.src);
-      const href = letterLinkUrl(content.href ?? '');
       if (!src && !options.editor) return '';
       html = src
         ? letterImageHtml(
@@ -76,10 +75,8 @@ export function renderEmailDocumentContent(
             inline ? 'left' : alignment,
             inline ? undefined : block.offsetPercent,
           )
-        : placeholder;
-      if (href) html = `<a href="${escapeHtml(href)}">${html}</a>`;
-      if (content.alt || href)
-        plain.push([content.alt, href].filter(Boolean).join(' — '));
+        : '<span class="email-editor-placeholder">Нажмите, чтобы загрузить картинку</span>';
+      if (content.alt) plain.push(content.alt);
     } else if (block.type === 'button' && content.type === 'button') {
       const href = letterLinkUrl(content.href);
       const label =
@@ -172,7 +169,7 @@ export function renderEmailDocumentContent(
           `<tr><td style="padding:0 8px;">${contents}</td></tr>`,
           'table-layout:fixed;',
         );
-        return `<!--[if mso]><td width="${width.toFixed(2)}" valign="${section.verticalAlignment ?? 'top'}"><![endif]--><div class="email-column" data-column-id="${escapeHtml(column.id)}"${options.editor ? ` role="group" aria-label="Колонка ${columnIndex + 1}"` : ''} style="display:inline-block;vertical-align:${section.verticalAlignment ?? 'top'};width:${options.editor ? `${(share * 100).toFixed(4)}%` : '100%'};max-width:${width.toFixed(4)}px;">${inner}</div><!--[if mso]></td><![endif]-->`;
+        return `<!--[if mso]><td width="${width.toFixed(2)}" valign="top"><![endif]--><div class="email-column" data-column-id="${escapeHtml(column.id)}"${options.editor ? ` role="group" aria-label="Колонка ${columnIndex + 1}"` : ''} style="display:inline-block;vertical-align:top;width:${options.editor ? `${(share * 100).toFixed(4)}%` : '100%'};max-width:${width.toFixed(4)}px;">${inner}</div><!--[if mso]></td><![endif]-->`;
       })
       .join('');
     const content = `<!--[if mso]><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="${sectionWidth}"><tr><![endif]-->${columns}<!--[if mso]></tr></table><![endif]-->`;

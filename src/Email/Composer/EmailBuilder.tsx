@@ -27,6 +27,8 @@ import { readAppearanceImage } from '../../utils/appearanceImage';
 import { backgroundImageStyle } from '../../utils/appearanceModel';
 import EmailCanvasControls from './EmailCanvasControls';
 import AppearanceColor from './AppearanceColor';
+import TextBlockSettings from './TextBlockSettings';
+import { readEmailText } from '../../utils/emailText';
 import AppearanceBackgroundImage from './AppearanceBackgroundImage';
 import { Trash2, Upload } from 'lucide-react';
 import { Field } from '../Field';
@@ -172,6 +174,13 @@ export default function EmailBuilder({
     columnId: string;
     blockId?: string;
   } | null>(null);
+  const [textSettingsOpen, setTextSettingsOpen] = useState<
+    'style' | 'link' | null
+  >(null);
+  const [textSelection, setTextSelection] = useState<{
+    start: number;
+    end: number;
+  } | null>(null);
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [manipulating, setManipulating] = useState(false);
   const [insertion, setInsertion] = useState<{
@@ -227,9 +236,20 @@ export default function EmailBuilder({
       ),
     }));
   };
+  const updateButtonStyle = (
+    changes: Partial<Extract<EmailBlock, { type: 'button' }>>,
+  ) => {
+    if (selectedBlock?.type !== 'button') return;
+    onChange((current) =>
+      updateEmailBlock(current, selectedBlock.id, (block) =>
+        block.type === 'button' ? { ...block, ...changes } : block,
+      ),
+    );
+  };
   const closePanels = useCallback(() => {
     setInsertion(null);
     setColumnsOpen(false);
+    setTextSettingsOpen(null);
   }, []);
   const closeSettings = () => {
     if (insertion) insertionTrigger.current?.focus();
@@ -243,7 +263,7 @@ export default function EmailBuilder({
     if (
       !insertion &&
       !columnsOpen &&
-      (!selectedBlock || selectedBlock.type === 'text')
+      (!selectedBlock || (selectedBlock.type === 'text' && !textSettingsOpen))
     )
       return;
     const dismiss = (event: PointerEvent) => {
@@ -268,6 +288,7 @@ export default function EmailBuilder({
     columnsOpen,
     selectedBlock?.id,
     selectedBlock?.type,
+    textSettingsOpen,
     closePanels,
   ]);
 
@@ -340,18 +361,18 @@ export default function EmailBuilder({
   }, [html, selection, columnsOpen, selectedBlock?.id]);
 
   useEffect(() => {
-    if (selectedBlock?.type === 'text' && !columnsOpen) {
+    if (selectedBlock?.type === 'text' && !columnsOpen && !textSettingsOpen) {
       const cell = Array.from(
         canvas.current?.querySelectorAll<HTMLElement>('[data-block-id]') ?? [],
       ).find((node) => node.dataset.blockId === selectedBlock.id);
       cell
         ?.querySelector<HTMLElement>('[data-email-text]')
         ?.focus({ preventScroll: true });
-    } else if (selectedBlock && !columnsOpen)
+    } else if (selectedBlock && selectedBlock.type !== 'text' && !columnsOpen)
       popover.current
         ?.querySelector<HTMLElement>('textarea,input:not([type="file"])')
         ?.focus();
-  }, [selectedBlock?.id, columnsOpen, locale]);
+  }, [selectedBlock?.id, columnsOpen, locale, textSettingsOpen]);
 
   useEffect(() => {
     if (insertion)
@@ -368,7 +389,8 @@ export default function EmailBuilder({
     if ('key' in event && event.key !== 'Enter' && event.key !== ' ') return;
     const column = node.closest<HTMLElement>('[data-column-id]');
     if (!column || !canvas.current?.contains(column)) return;
-    if (!node.closest('[data-email-text]')) event.preventDefault();
+    if (!node.closest('[data-email-text]') || node.closest('a'))
+      event.preventDefault();
     const add = node.closest<HTMLElement>('[data-add-column-id]');
     if (add && surface.current) {
       const host = surface.current.getBoundingClientRect();
@@ -479,14 +501,52 @@ export default function EmailBuilder({
       };
     });
   };
+  const openTextSettings = (mode: 'style' | 'link') => {
+    if (mode === 'link') {
+      const editor = Array.from(
+        canvas.current?.querySelectorAll<HTMLElement>('[data-email-text]') ??
+          [],
+      ).find(
+        (node) =>
+          node.closest<HTMLElement>('[data-block-id]')?.dataset.blockId ===
+          selectedBlock?.id,
+      );
+      const selection = window.getSelection();
+      const range = selection?.rangeCount
+        ? selection.getRangeAt(0).cloneRange()
+        : null;
+      if (
+        editor &&
+        range &&
+        editor.contains(range.startContainer) &&
+        editor.contains(range.endContainer)
+      ) {
+        const startNode =
+          range.startContainer.nodeType === Node.ELEMENT_NODE
+            ? (range.startContainer as Element)
+            : range.startContainer.parentElement;
+        const anchor = startNode?.closest('a');
+        if (range.collapsed && anchor && editor.contains(anchor))
+          range.selectNodeContents(anchor);
+        const prefix = range.cloneRange();
+        prefix.selectNodeContents(editor);
+        prefix.setEnd(range.startContainer, range.startOffset);
+        const start = readEmailText(prefix.cloneContents()).text.length;
+        setTextSelection({
+          start,
+          end: start + readEmailText(range.cloneContents()).text.length,
+        });
+      } else setTextSelection(null);
+    }
+    editingText.current = null;
+    setTextSettingsOpen(mode);
+  };
+
   const updateInlineText = (node: HTMLElement) => {
     const id = node.closest<HTMLElement>('[data-block-id]')?.dataset.blockId;
     if (!id) return;
     editingText.current = node;
-    updateContent(id, locale, {
-      type: 'text',
-      text: node.innerText ?? node.textContent ?? '',
-    });
+    updateContent(id, locale, readEmailText(node));
   };
   const confirmRemoval = (ids: string[], name: string) => {
     const filled = Object.values(document.versions).some((version) =>
@@ -678,6 +738,7 @@ export default function EmailBuilder({
           }}
           onDeleteSection={deleteSection}
           onDeleteBlock={deleteBlock}
+          onOpenTextSettings={openTextSettings}
           onAddBeside={(
             columnId,
             anchorId,
@@ -748,7 +809,9 @@ export default function EmailBuilder({
         )}
         {!insertion &&
           !manipulating &&
-          ((selectedBlock && selectedBlock.type !== 'text') || columnsOpen) &&
+          ((selectedBlock &&
+            (selectedBlock.type !== 'text' || textSettingsOpen)) ||
+            columnsOpen) &&
           target && (
             <div
               ref={popover}
@@ -757,7 +820,11 @@ export default function EmailBuilder({
               aria-label={
                 columnsOpen
                   ? 'Настройки секции'
-                  : `Настройки блока ${labels[selectedBlock!.type].toLowerCase()}`
+                  : selectedBlock?.type === 'text'
+                    ? textSettingsOpen === 'link'
+                      ? 'Ссылка в тексте'
+                      : 'Оформление текста'
+                    : `Настройки блока ${labels[selectedBlock!.type].toLowerCase()}`
               }
               style={{
                 top: position?.panelTop ?? 16,
@@ -766,7 +833,13 @@ export default function EmailBuilder({
             >
               <div className={e.popoverHead}>
                 <strong>
-                  {columnsOpen ? 'Секция' : labels[selectedBlock!.type]}
+                  {columnsOpen
+                    ? 'Секция'
+                    : selectedBlock?.type === 'text'
+                      ? textSettingsOpen === 'link'
+                        ? 'Ссылка'
+                        : 'Оформление текста'
+                      : labels[selectedBlock!.type]}
                 </strong>
                 <button
                   type="button"
@@ -801,43 +874,94 @@ export default function EmailBuilder({
                     }
                     onChange={(textColor) => updateSection({ textColor })}
                   />
+                  <details className={e.sectionGroup}>
+                    <summary>Рамка и углы</summary>
+                    <div className={e.fields}>
+                      <label className={e.hint}>
+                        <input
+                          type="checkbox"
+                          checked={Boolean(target.section.borderColor)}
+                          onChange={(event) =>
+                            updateSection({
+                              borderColor: event.target.checked
+                                ? document.appearance.linkColor
+                                : undefined,
+                            })
+                          }
+                        />{' '}
+                        Рамка секции
+                      </label>
+                      {target.section.borderColor && (
+                        <AppearanceColor
+                          label="Цвет рамки секции"
+                          value={target.section.borderColor}
+                          onChange={(borderColor) =>
+                            updateSection({ borderColor })
+                          }
+                        />
+                      )}
+                      <Field label="Закругление углов">
+                        <input
+                          type="range"
+                          min={0}
+                          max={48}
+                          value={target.section.borderRadius ?? 0}
+                          onChange={(event) =>
+                            updateSection({
+                              borderRadius: Number(event.target.value),
+                            })
+                          }
+                        />
+                      </Field>
+                      <div className={e.rangeLabels}>
+                        <span>Прямые</span>
+                        <span>Закруглённые</span>
+                      </div>
+                    </div>
+                  </details>
                   <p className={e.hint}>
                     Добавьте текст в эту секцию — он будет поверх фона.
                     Оформление общее для всех языков.
                   </p>
-                  <strong>Колонки</strong>
-                  {target.section.columns.map((column, index) => (
-                    <div className={e.columnRow} key={column.id}>
+                  <details className={e.sectionGroup}>
+                    <summary>Колонки</summary>
+                    <div className={e.fields}>
+                      {target.section.columns.map((column, index) => (
+                        <div className={e.columnRow} key={column.id}>
+                          <button
+                            type="button"
+                            aria-pressed={column.id === target.column.id}
+                            onClick={() =>
+                              setSelection({ columnId: column.id })
+                            }
+                          >
+                            Колонка {index + 1}
+                          </button>
+                          {target.section.columns.length > 1 && (
+                            <button
+                              type="button"
+                              aria-label={`Удалить колонку ${index + 1}`}
+                              onClick={() => deleteColumn(column.id)}
+                            >
+                              <Trash2
+                                size={16}
+                                strokeWidth={1.7}
+                                aria-hidden="true"
+                                focusable="false"
+                              />
+                            </button>
+                          )}
+                        </div>
+                      ))}
                       <button
                         type="button"
-                        aria-pressed={column.id === target.column.id}
-                        onClick={() => setSelection({ columnId: column.id })}
+                        className={e.addColumn}
+                        onClick={() => addColumn(target.section.id)}
                       >
-                        Колонка {index + 1}
+                        + Колонка справа
                       </button>
-                      {target.section.columns.length > 1 && (
-                        <button
-                          type="button"
-                          aria-label={`Удалить колонку ${index + 1}`}
-                          onClick={() => deleteColumn(column.id)}
-                        >
-                          <Trash2
-                            size={16}
-                            strokeWidth={1.7}
-                            aria-hidden="true"
-                            focusable="false"
-                          />
-                        </button>
-                      )}
                     </div>
-                  ))}
-                  <button
-                    type="button"
-                    className={e.addColumn}
-                    onClick={() => addColumn(target.section.id)}
-                  >
-                    + Колонка справа
-                  </button>
+                  </details>
                 </div>
               ) : (
                 <>
@@ -886,26 +1010,103 @@ export default function EmailBuilder({
                       )}
                     </div>
                   )}
+                  {selectedBlock?.type === 'text' &&
+                    selectedContent?.type === 'text' && (
+                      <TextBlockSettings
+                        key={`${selectedBlock.id}-${locale}-${textSettingsOpen}`}
+                        mode={textSettingsOpen === 'link' ? 'link' : 'style'}
+                        block={selectedBlock}
+                        content={selectedContent}
+                        selection={textSelection}
+                        textColor={
+                          target.section.textColor ??
+                          document.appearance.textColor
+                        }
+                        onStyle={(changes) =>
+                          onChange((current) =>
+                            updateEmailBlock(
+                              current,
+                              selectedBlock.id,
+                              (block) =>
+                                block.type === 'text'
+                                  ? { ...block, ...changes }
+                                  : block,
+                            ),
+                          )
+                        }
+                        onContent={(content) =>
+                          updateContent(selectedBlock.id, locale, content)
+                        }
+                      />
+                    )}
+                  {selectedBlock?.type === 'button' && (
+                    <div className={e.fields}>
+                      <Field label="Вид кнопки">
+                        <select
+                          className="custom-input"
+                          value={selectedBlock.variant ?? 'filled'}
+                          onChange={(event) => {
+                            const variant = event.target.value as
+                              | 'filled'
+                              | 'outline';
+                            updateButtonStyle({ variant });
+                          }}
+                        >
+                          <option value="filled">С заливкой</option>
+                          <option value="outline">Только контур</option>
+                        </select>
+                      </Field>
+                      <AppearanceColor
+                        label={
+                          selectedBlock.variant === 'outline'
+                            ? 'Цвет контура кнопки'
+                            : 'Фон кнопки'
+                        }
+                        value={
+                          selectedBlock.background ??
+                          document.appearance.linkColor
+                        }
+                        onChange={(background) =>
+                          updateButtonStyle({ background })
+                        }
+                      />
+                      <AppearanceColor
+                        label="Цвет текста кнопки"
+                        value={
+                          selectedBlock.color ??
+                          (selectedBlock.variant === 'outline'
+                            ? (selectedBlock.background ??
+                              document.appearance.linkColor)
+                            : '#ffffff')
+                        }
+                        onChange={(color) =>
+                          updateButtonStyle({ color })
+                        }
+                      />
+                    </div>
+                  )}
                   <BlockFields
                     content={selectedContent!}
                     onChange={(value) =>
                       updateContent(selectedBlock!.id, locale, value)
                     }
                   />
-                  <button
-                    type="button"
-                    className={e.removeBlockInPanel}
-                    title="Удалить блок"
-                    aria-label={`Удалить блок ${labels[selectedBlock!.type].toLowerCase()}`}
-                    onClick={() => deleteBlock(selectedBlock!.id)}
-                  >
-                    <Trash2
-                      size={16}
-                      strokeWidth={1.7}
-                      aria-hidden="true"
-                      focusable="false"
-                    />
-                  </button>
+                  {selectedBlock?.type !== 'text' && (
+                    <button
+                      type="button"
+                      className={e.removeBlockInPanel}
+                      title="Удалить блок"
+                      aria-label={`Удалить блок ${labels[selectedBlock!.type].toLowerCase()}`}
+                      onClick={() => deleteBlock(selectedBlock!.id)}
+                    >
+                      <Trash2
+                        size={16}
+                        strokeWidth={1.7}
+                        aria-hidden="true"
+                        focusable="false"
+                      />
+                    </button>
+                  )}
                 </>
               )}
             </div>

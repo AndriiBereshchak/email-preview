@@ -1,4 +1,5 @@
 import { emptyEmailBlockContent } from './emailDocument';
+import { emailTextHtml } from './emailText';
 import { emailBlockRows } from './emailDocumentLayout';
 import { emailImageUrl } from './appearanceImage';
 import type {
@@ -12,13 +13,16 @@ import {
   appearanceColor,
   backgroundImageCss,
 } from './appearanceModel';
-import { escapeHtml, letterImageHtml, renderEmailHtml } from './emailHtml';
+import {
+  escapeHtml,
+  textWithBreaksHtml,
+  letterImageHtml,
+  renderEmailHtml,
+} from './emailHtml';
 import { letterLinkUrl, letterButtonCss } from './letterLink';
 import type { LetterLocale, LetterPreviewResult } from './localModel';
 
 const weight = (value = 1) => (Number.isFinite(value) && value > 0 ? value : 1);
-const lines = (value: string): string =>
-  escapeHtml(value).replace(/\r\n?|\n/g, '<br>');
 const table = (content: string, style = '', attributes = ''): string =>
   `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" ${attributes} style="border-collapse:separate;border-spacing:0;width:100%;${escapeHtml(style)}">${content}</table>`;
 export function renderEmailDocumentContent(
@@ -62,7 +66,7 @@ export function renderEmailDocumentContent(
       const editable = options.editor
         ? ' data-email-text contenteditable="plaintext-only" tabindex="0" role="textbox" aria-label="Текст письма" aria-multiline="true" data-placeholder="Напишите текст письма…"'
         : '';
-      html = `<${tag}${editable} style="margin:0;color:${appearanceColor(section.textColor, a.textColor)};${style}${width}">${lines(content.text)}</${tag}>`;
+      html = `<${tag}${editable} style="margin:0;color:${appearanceColor(block.color, appearanceColor(section.textColor, a.textColor))};${style}${width}">${emailTextHtml(content, a.linkColor)}</${tag}>`;
       plain.push(content.text);
     } else if (block.type === 'image' && content.type === 'image') {
       const src = emailImageUrl(content.src);
@@ -80,14 +84,19 @@ export function renderEmailDocumentContent(
     } else if (block.type === 'button' && content.type === 'button') {
       const href = letterLinkUrl(content.href);
       const label =
-        lines(content.text) || (options.editor ? 'Текст кнопки' : '');
+        textWithBreaksHtml(content.text) ||
+        (options.editor ? 'Текст кнопки' : '');
       const buttonCss = letterButtonCss({
         size: 'medium',
         radius: 4,
         background: appearanceColor(block.background, a.linkColor),
       });
       const dimensions = `${Number.isFinite(block.buttonWidth) ? `width:${Math.max(48, block.buttonWidth!)}px;` : ''}${Number.isFinite(block.paddingY) ? `padding-top:${Math.max(0, block.paddingY!)}px;padding-bottom:${Math.max(0, block.paddingY!)}px;` : ''}`;
-      const style = `${buttonCss}${dimensions}color:${appearanceColor(block.color, '#ffffff')};text-decoration:none;font-weight:bold;`;
+      const outline =
+        block.variant === 'outline'
+          ? `background-color:transparent;border:1px solid ${appearanceColor(block.background, a.linkColor)};`
+          : '';
+      const style = `${buttonCss}${dimensions}${outline}color:${appearanceColor(block.color, block.variant === 'outline' ? appearanceColor(block.background, a.linkColor) : '#ffffff')};text-decoration:none;font-weight:bold;`;
       const draggable = options.editor
         ? ' data-email-button draggable="true"'
         : '';

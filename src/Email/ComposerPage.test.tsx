@@ -336,6 +336,7 @@ it('opens the constructor without body text and keeps shared layout with indepen
   expect(page.getByText('Добавьте первую секцию')).toBeTruthy();
   fireEvent.click(page.getByRole('button', { name: '+ Добавить секцию' }));
   fireEvent.click(page.getByRole('button', { name: 'Настройки секции 1' }));
+  fireEvent.click(page.getByText('Колонки', { exact: true }));
   fireEvent.click(page.getByRole('button', { name: '+ Колонка справа' }));
   fireEvent.click(page.getByRole('button', { name: '+ Колонка справа' }));
   fireEvent.click(page.getByRole('button', { name: 'Закрыть настройки' }));

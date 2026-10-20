@@ -423,6 +423,7 @@ it('adds sections only at the bottom and appends columns on the right of the cho
     page.getAllByRole('button', { name: 'Редактировать текст' })[0],
   );
   fireEvent.click(page.getByRole('button', { name: 'Настройки секции 1' }));
+  fireEvent.click(page.getByText('Колонки', { exact: true }));
   fireEvent.click(page.getByRole('button', { name: '+ Колонка справа' }));
   expect(page.document().sections[0].columns).toHaveLength(3);
   expect(page.document().sections[0].columns[2].blocks).toEqual([]);
@@ -493,6 +494,7 @@ it('opens the columns of the clicked section and deletes only the intended colum
   expect(page.getByRole('dialog', { name: 'Настройки секции' })).toBeTruthy();
   expect(page.queryByRole('button', { name: 'Удалить колонку 1' })).toBeNull();
   fireEvent.click(page.getByRole('button', { name: 'Настройки секции 1' }));
+  fireEvent.click(page.getByText('Колонки', { exact: true }));
   fireEvent.click(page.getByRole('button', { name: 'Удалить колонку 2' }));
   expect(
     page.document().sections[0].columns.map((column) => column.id),
@@ -836,4 +838,94 @@ it('narrows text without changing its contents and allows adding a block in the 
   expect(blocks[1].rowId).toBe(blocks[0].rowId);
   expect(blocks[1].type).toBe('button');
   expect(page.document().versions).toBe(versions);
+});
+
+it('styles text as a colored heading and links a selected phrase without affecting translations', () => {
+  const page = setup();
+  const editor = page.container.querySelector<HTMLElement>(
+    '[data-block-id="a"] [data-email-text]',
+  )!;
+  fireEvent.click(editor);
+  const range = document.createRange();
+  range.selectNodeContents(editor);
+  window.getSelection()!.removeAllRanges();
+  window.getSelection()!.addRange(range);
+  fireEvent.click(page.getByRole('button', { name: 'Настройки текста' }));
+  fireEvent.change(page.getByRole('combobox', { name: 'Вид текста' }), {
+    target: { value: 'heading' },
+  });
+  fireEvent.change(page.getByRole('textbox', { name: 'Цвет букв' }), {
+    target: { value: '#ff5500' },
+  });
+  expect(
+    page.queryByRole('textbox', { name: 'Адрес ссылки в тексте' }),
+  ).toBeNull();
+  fireEvent.click(page.getByRole('button', { name: 'Закрыть настройки' }));
+  const updatedEditor = page.container.querySelector(
+    '[data-block-id="a"] [data-email-text]',
+  )!;
+  fireEvent.click(updatedEditor);
+  range.selectNodeContents(updatedEditor);
+  window.getSelection()!.removeAllRanges();
+  window.getSelection()!.addRange(range);
+  fireEvent.click(page.getByRole('button', { name: 'Ссылка в тексте' }));
+  expect(page.queryByRole('combobox', { name: 'Вид текста' })).toBeNull();
+  fireEvent.change(
+    page.getByRole('textbox', { name: 'Адрес ссылки в тексте' }),
+    { target: { value: 'https://example.test/details' } },
+  );
+  fireEvent.click(page.getByRole('button', { name: 'Применить ссылку' }));
+  const heading = page.container.querySelector('[data-block-id="a"] h2')!;
+  expect((heading as HTMLElement).style.color).toBe('rgb(255, 85, 0)');
+  expect(heading.querySelector('a')!.getAttribute('href')).toBe(
+    'https://example.test/details',
+  );
+  expect(page.document().versions.uk!.blocks.a).toEqual({
+    type: 'text',
+    text: 'Перший',
+  });
+  fireEvent.click(page.getByRole('button', { name: 'Убрать ссылку' }));
+  expect(page.container.querySelector('[data-block-id="a"] a')).toBeNull();
+  fireEvent.pointerDown(document.body);
+  expect(page.queryByRole('dialog')).toBeNull();
+});
+
+it('uses colored outline buttons and section borders from the existing settings', () => {
+  const initial = fixture();
+  initial.sections[0].columns[0].blocks = [{ id: 'cta', type: 'button' }];
+  initial.versions.ru!.blocks.cta = {
+    type: 'button',
+    text: 'Далее',
+    href: 'https://example.test',
+  };
+  const page = setup(initial);
+  fireEvent.click(page.getByRole('button', { name: 'Редактировать кнопку' }));
+  fireEvent.change(page.getByRole('combobox', { name: 'Вид кнопки' }), {
+    target: { value: 'outline' },
+  });
+  fireEvent.change(page.getByRole('textbox', { name: 'Цвет контура кнопки' }), {
+    target: { value: '#55ff99' },
+  });
+  fireEvent.change(page.getByRole('textbox', { name: 'Цвет текста кнопки' }), {
+    target: { value: '#ffffff' },
+  });
+  const button = page.container.querySelector<HTMLElement>(
+    '[data-email-button]',
+  )!;
+  expect(button.style.backgroundColor).toBe('transparent');
+  expect(button.style.borderColor).toBe('rgb(85, 255, 153)');
+  expect(button.style.color).toBe('rgb(255, 255, 255)');
+  fireEvent.click(page.getByRole('button', { name: 'Настройки секции 1' }));
+  fireEvent.click(page.getByText('Рамка и углы'));
+  fireEvent.click(page.getByRole('checkbox', { name: 'Рамка секции' }));
+  fireEvent.change(page.getByRole('textbox', { name: 'Цвет рамки секции' }), {
+    target: { value: '#55ff99' },
+  });
+  fireEvent.change(page.getByRole('slider', { name: 'Закругление углов' }), {
+    target: { value: '12' },
+  });
+  expect(page.document().sections[0]).toMatchObject({
+    borderColor: '#55ff99',
+    borderRadius: 12,
+  });
 });

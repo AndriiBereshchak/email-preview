@@ -17,7 +17,7 @@ import {
   updateEmailBlock,
 } from '../../utils/emailDocumentLayout';
 import e from './emailBuilder.module.css';
-import { SlidersHorizontal, Trash2 } from 'lucide-react';
+import { Link2, SlidersHorizontal, Trash2 } from 'lucide-react';
 
 type Box = {
   image?: boolean;
@@ -94,6 +94,7 @@ export default function EmailCanvasControls({
   onOpenSection,
   onDeleteSection,
   onDeleteBlock,
+  onOpenTextSettings,
   onAddBeside,
 }: {
   document: EmailDocument;
@@ -107,6 +108,7 @@ export default function EmailCanvasControls({
   onOpenSection: (id: string) => void;
   onDeleteSection: (id: string) => void;
   onDeleteBlock: (id: string) => void;
+  onOpenTextSettings: (mode: 'style' | 'link') => void;
   onAddBeside: (
     columnId: string,
     anchorId: string,
@@ -806,6 +808,33 @@ export default function EmailCanvasControls({
           >
             ⠿
           </button>
+          {selectedBlock.type === 'text' && (
+            <button
+              type="button"
+              className={e.textSettings}
+              style={{ top: blockBox.top - 28, left: blockBox.left + 26 }}
+              aria-label="Настройки текста"
+              title="Оформление текста"
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={() => onOpenTextSettings('style')}
+            >
+              <SlidersHorizontal size={16} aria-hidden="true" />
+            </button>
+          )}
+          {selectedBlock.type === 'text' && (
+            <button
+              type="button"
+              className={e.textLink}
+              style={{ top: blockBox.top - 28, left: blockBox.left + 56 }}
+              aria-label="Ссылка в тексте"
+              title="Добавить или изменить ссылку"
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={() => onOpenTextSettings('link')}
+            >
+              <Link2 size={16} aria-hidden="true" />
+            </button>
+          )}
+
           {selectedBlock.type === 'text' && (
             <button
               type="button"

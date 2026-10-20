@@ -16,6 +16,9 @@ export const escapeHtml = (value: string) =>
       ]!,
   );
 
+export const textWithBreaksHtml = (value: string): string =>
+  escapeHtml(value).replace(/\r\n?|\n/g, '<br>');
+
 export function letterImageHtml(
   image: Pick<EmailImage, 'url' | 'name'>,
   fullWidth = false,

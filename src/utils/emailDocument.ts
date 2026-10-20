@@ -6,6 +6,7 @@ export type EmailBlock = (
   | {
       id: string;
       type: 'text';
+      color?: string;
       variant?: 'body' | 'heading';
     }
   | {
@@ -17,6 +18,7 @@ export type EmailBlock = (
   | {
       id: string;
       type: 'button';
+      variant?: 'filled' | 'outline';
       alignment?: EmailAlignment;
       insetPercent?: number;
       buttonWidth?: number;
@@ -45,7 +47,11 @@ export interface EmailSection {
   columns: EmailColumn[];
 }
 export type EmailBlockContent =
-  | { type: 'text'; text: string }
+  | {
+      type: 'text';
+      text: string;
+      links?: { start: number; end: number; href: string }[];
+    }
   | { type: 'image'; src: string; alt: string }
   | { type: 'button'; text: string; href: string };
 

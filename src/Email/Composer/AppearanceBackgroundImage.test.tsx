@@ -21,6 +21,7 @@ it('uploads, previews and removes a background image', async () => {
   const onChange = vi.fn();
   const view = render(
     <AppearanceBackgroundImage
+      compact
       label="Фон письма"
       value=""
       onChange={onChange}
@@ -34,6 +35,7 @@ it('uploads, previews and removes a background image', async () => {
   expect(onChange).toHaveBeenCalledWith(src);
   view.rerender(
     <AppearanceBackgroundImage
+      compact
       label="Фон письма"
       value={src}
       onChange={onChange}

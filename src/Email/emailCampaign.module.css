@@ -1662,6 +1662,71 @@ a.subject:hover {
 .appearanceSettings .field {
   margin: 0;
 }
+.appearanceBackground {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.appearanceBackground + .appearanceBackground {
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+.appearanceLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.appearanceLabel svg {
+  flex-shrink: 0;
+}
+.appearanceSettings .fieldLabel {
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.backgroundUpload {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: white;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+.backgroundUpload svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.backgroundUpload:hover {
+  border-color: #68bb8a;
+  background: #f6faf7;
+}
+.backgroundUpload:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.appearanceHint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+.appearanceHint svg {
+  flex-shrink: 0;
+}
+.appearanceReset {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
 .appearanceColor {
   display: flex;
   align-items: center;

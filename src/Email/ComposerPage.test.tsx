@@ -310,7 +310,7 @@ describe('composer demo checks', () => {
     );
     await page.findByText('Просмотрено версий: 2 из 2');
     fireEvent.click(page.getByRole('button', { name: 'Назад' }));
-    fireEvent.change(page.getByLabelText('Фон письма', { exact: true }), {
+    fireEvent.change(page.getByLabelText('Само письмо', { exact: true }), {
       target: { value: '#ffeedd' },
     });
     openReview(page);

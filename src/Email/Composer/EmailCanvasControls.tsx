@@ -17,7 +17,7 @@ import {
   updateEmailBlock,
 } from '../../utils/emailDocumentLayout';
 import e from './emailBuilder.module.css';
-import { Link2, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { GripVertical, Link2, SlidersHorizontal, Trash2 } from 'lucide-react';
 
 type Box = {
   image?: boolean;
@@ -84,6 +84,7 @@ type Resize = { pointerId: number; startX: number; width: number } & (
 
 export default function EmailCanvasControls({
   document,
+  settingsOpen,
   canvas,
   surface,
   columnId,
@@ -98,6 +99,7 @@ export default function EmailCanvasControls({
   onAddBeside,
 }: {
   document: EmailDocument;
+  settingsOpen: boolean;
   canvas: RefObject<HTMLDivElement | null>;
   surface: RefObject<HTMLDivElement | null>;
   columnId?: string;
@@ -179,6 +181,7 @@ export default function EmailCanvasControls({
         ? null
         : new ResizeObserver(measure);
     observer?.observe(content);
+    observer?.observe(host);
     host.addEventListener('load', measure, true);
     window.addEventListener('resize', measure);
     return () => {
@@ -186,7 +189,7 @@ export default function EmailCanvasControls({
       host.removeEventListener('load', measure, true);
       window.removeEventListener('resize', measure);
     };
-  }, [document, canvas, surface]);
+  }, [document, canvas, surface, settingsOpen]);
 
   useEffect(() => {
     const host = surface.current;
@@ -215,14 +218,25 @@ export default function EmailCanvasControls({
         event.dataTransfer.effectAllowed = 'move';
         event.dataTransfer.setData('text/plain', cell.dataset.blockId!);
       }
-      onSelect(column.dataset.columnId!, cell.dataset.blockId);
+      // Selecting here would open settings and steal focus during native dragging.
       onInteractionChange(true);
     };
     const over = (event: DragEvent) => {
       const moving = dragged.current;
       if (!moving || !(event.target instanceof HTMLElement)) return;
-      const node = event.target;
-      const sidePoint = node.closest<HTMLElement>('[data-beside-anchor]');
+      const sidePoint = event.target.closest<HTMLElement>(
+        '[data-beside-anchor]',
+      );
+
+      const node =
+        moving.type === 'block' && sidePoint?.dataset.besideAnchor === moving.id
+          ? (Array.from(
+              canvas.current?.querySelectorAll<HTMLElement>(
+                '[data-block-id]',
+              ) ?? [],
+            ).find((cell) => cell.dataset.blockId === moving.id) ??
+            event.target)
+          : event.target;
       if (
         moving.type === 'block' &&
         sidePoint &&
@@ -618,66 +632,69 @@ export default function EmailCanvasControls({
         <div
           key={box.id}
           className={e.sectionTools}
+          data-block-selected={Boolean(blockId) || undefined}
           style={{ top: box.top - 8, left: box.left, width: box.width }}
         >
-          <button
-            type="button"
-            className={e.sectionDrag}
-            style={{ top: 8, left: -22 }}
-            draggable
-            aria-label={`Переместить секцию ${index + 1}`}
-            title="Перетащите секцию"
-            onDragStart={(event) => {
-              onInteractionChange(true);
-              dragged.current = { type: 'section', id: box.id };
-              event.dataTransfer.effectAllowed = 'move';
-              event.dataTransfer.setData('text/plain', box.id);
-            }}
-            onKeyDown={(event) => {
-              if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
-              event.preventDefault();
-              const next = event.key === 'ArrowUp' ? index - 1 : index + 1;
-              if (next < 0 || next >= document.sections.length) return;
-              onChange((current) =>
-                moveEmailSection(
-                  current,
-                  box.id,
-                  document.sections[event.key === 'ArrowUp' ? next : next + 1]
-                    ?.id,
-                ),
-              );
-            }}
-          >
-            ⠿
-          </button>
-          <button
-            className={e.sectionSettings}
-            type="button"
-            title="Настройки секции"
-            aria-label={`Настройки секции ${index + 1}`}
-            onClick={() => onOpenSection(box.id)}
-          >
-            <SlidersHorizontal
-              size={16}
-              strokeWidth={1.7}
-              aria-hidden="true"
-              focusable="false"
-            />
-          </button>
-          <button
-            className={e.sectionDelete}
-            type="button"
-            title="Удалить секцию"
-            aria-label={`Удалить секцию ${index + 1}`}
-            onClick={() => onDeleteSection(box.id)}
-          >
-            <Trash2
-              size={16}
-              strokeWidth={1.7}
-              aria-hidden="true"
-              focusable="false"
-            />
-          </button>
+          <div className={e.sectionToolbar}>
+            <button
+              type="button"
+              className={e.sectionDrag}
+              draggable
+              aria-label={`Переместить секцию ${index + 1}`}
+              title="Перетащите секцию"
+              onDragStart={(event) => {
+                onInteractionChange(true);
+                dragged.current = { type: 'section', id: box.id };
+                event.dataTransfer.effectAllowed = 'move';
+                event.dataTransfer.setData('text/plain', box.id);
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')
+                  return;
+                event.preventDefault();
+                const next = event.key === 'ArrowUp' ? index - 1 : index + 1;
+                if (next < 0 || next >= document.sections.length) return;
+                onChange((current) =>
+                  moveEmailSection(
+                    current,
+                    box.id,
+                    document.sections[event.key === 'ArrowUp' ? next : next + 1]
+                      ?.id,
+                  ),
+                );
+              }}
+            >
+              <GripVertical size={16} strokeWidth={1.7} aria-hidden="true" />
+            </button>
+            <button
+              className={e.sectionSettings}
+              type="button"
+              title="Настройки секции"
+              aria-label={`Настройки секции ${index + 1}`}
+              onClick={() => onOpenSection(box.id)}
+            >
+              <SlidersHorizontal
+                size={16}
+                strokeWidth={1.7}
+                aria-hidden="true"
+                focusable="false"
+              />
+            </button>
+            <button
+              className={e.sectionDelete}
+              type="button"
+              title="Удалить секцию"
+              aria-label={`Удалить секцию ${index + 1}`}
+              onClick={() => onDeleteSection(box.id)}
+            >
+              <Trash2
+                size={16}
+                strokeWidth={1.7}
+                aria-hidden="true"
+                focusable="false"
+              />
+            </button>
+          </div>
           <button
             type="button"
             className={e.sectionResize}
@@ -771,90 +788,103 @@ export default function EmailCanvasControls({
           })}
       {blockBox && selectedBlock && (
         <>
-          <button
-            type="button"
-            className={e.blockDrag}
-            style={{ top: blockBox.top - 22, left: blockBox.left }}
-            draggable
-            aria-label="Переместить блок"
-            title="Перетащите блок"
-            onDragStart={(event) => {
-              onInteractionChange(true);
-              dragged.current = { type: 'block', id: blockBox.id };
-              event.dataTransfer.effectAllowed = 'move';
-              event.dataTransfer.setData('text/plain', blockBox.id);
-            }}
-            onKeyDown={(event) => {
-              if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
-              event.preventDefault();
-              const column = activeSection?.columns.find(
-                (item) => item.id === columnId,
-              );
-              if (!column) return;
-              const index = column.blocks.findIndex(
-                (item) => item.id === blockId,
-              );
-              const next = event.key === 'ArrowUp' ? index - 1 : index + 1;
-              if (next < 0 || next >= column.blocks.length) return;
-              onChange((current) =>
-                moveEmailBlock(
-                  current,
-                  blockId!,
-                  column.id,
-                  column.blocks[event.key === 'ArrowUp' ? next : next + 1]?.id,
-                ),
-              );
-            }}
+          <div
+            className={e.blockToolbar}
+            style={{ top: blockBox.top - 32, left: blockBox.left }}
           >
-            ⠿
-          </button>
-          {selectedBlock.type === 'text' && (
+            <button
+              type="button"
+              className={e.blockDrag}
+              draggable
+              aria-label="Переместить блок"
+              title="Перетащите блок"
+              onDragStart={(event) => {
+                onInteractionChange(true);
+                dragged.current = {
+                  type: 'block',
+                  id: blockBox.id,
+                  grabX: Math.max(
+                    0,
+                    event.clientX -
+                      surface.current!.getBoundingClientRect().left -
+                      blockBox.left,
+                  ),
+                };
+                event.dataTransfer.effectAllowed = 'move';
+                event.dataTransfer.setData('text/plain', blockBox.id);
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')
+                  return;
+                event.preventDefault();
+                const column = activeSection?.columns.find(
+                  (item) => item.id === columnId,
+                );
+                if (!column) return;
+                const index = column.blocks.findIndex(
+                  (item) => item.id === blockId,
+                );
+                const next = event.key === 'ArrowUp' ? index - 1 : index + 1;
+                if (next < 0 || next >= column.blocks.length) return;
+                onChange((current) =>
+                  moveEmailBlock(
+                    current,
+                    blockId!,
+                    column.id,
+                    column.blocks[event.key === 'ArrowUp' ? next : next + 1]
+                      ?.id,
+                  ),
+                );
+              }}
+            >
+              <GripVertical size={16} strokeWidth={1.7} aria-hidden="true" />
+            </button>
             <button
               type="button"
               className={e.textSettings}
-              style={{ top: blockBox.top - 28, left: blockBox.left + 26 }}
-              aria-label="Настройки текста"
-              title="Оформление текста"
+              aria-label={
+                selectedBlock.type === 'text'
+                  ? 'Настройки текста'
+                  : selectedBlock.type === 'image'
+                    ? 'Настройки картинки'
+                    : 'Настройки кнопки'
+              }
+              title="Настройки блока"
               onPointerDown={(event) => event.preventDefault()}
-              onClick={() => onOpenTextSettings('style')}
+              onClick={() =>
+                selectedBlock.type === 'text'
+                  ? onOpenTextSettings('style')
+                  : onSelect(columnId!, selectedBlock.id)
+              }
             >
-              <SlidersHorizontal size={16} aria-hidden="true" />
-            </button>
-          )}
-          {selectedBlock.type === 'text' && (
-            <button
-              type="button"
-              className={e.textLink}
-              style={{ top: blockBox.top - 28, left: blockBox.left + 56 }}
-              aria-label="Ссылка в тексте"
-              title="Добавить или изменить ссылку"
-              onPointerDown={(event) => event.preventDefault()}
-              onClick={() => onOpenTextSettings('link')}
-            >
-              <Link2 size={16} aria-hidden="true" />
-            </button>
-          )}
-
-          {selectedBlock.type === 'text' && (
-            <button
-              type="button"
-              className={e.textDelete}
-              style={{
-                top: blockBox.top - 28,
-                left: blockBox.left + blockBox.width - 28,
-              }}
-              aria-label="Удалить блок текст"
-              title="Удалить блок"
-              onClick={() => onDeleteBlock(selectedBlock.id)}
-            >
-              <Trash2
+              <SlidersHorizontal
                 size={16}
                 strokeWidth={1.7}
                 aria-hidden="true"
-                focusable="false"
               />
             </button>
-          )}
+            {selectedBlock.type === 'text' && (
+              <button
+                type="button"
+                className={e.textLink}
+                aria-label="Ссылка в тексте"
+                title="Добавить или изменить ссылку"
+                onPointerDown={(event) => event.preventDefault()}
+                onClick={() => onOpenTextSettings('link')}
+              >
+                <Link2 size={16} strokeWidth={1.7} aria-hidden="true" />
+              </button>
+            )}
+            <button
+              type="button"
+              className={e.textDelete}
+              aria-label={`Удалить блок ${selectedBlock.type === 'text' ? 'текст' : selectedBlock.type === 'image' ? 'картинка' : 'кнопка'}`}
+              title="Удалить блок"
+              onClick={() => onDeleteBlock(selectedBlock.id)}
+            >
+              <Trash2 size={16} strokeWidth={1.7} aria-hidden="true" />
+            </button>
+          </div>
           {selectedBlock.type === 'button' && blockBox.button && (
             <button
               type="button"
@@ -893,7 +923,9 @@ export default function EmailCanvasControls({
                   minimumWidth:
                     textWidth +
                     parseFloat(style.paddingLeft) +
-                    parseFloat(style.paddingRight),
+                    parseFloat(style.paddingRight) +
+                    parseFloat(style.borderLeftWidth || '0') +
+                    parseFloat(style.borderRightWidth || '0'),
                   availableWidth,
                   paddingY: selectedBlock.paddingY ?? 12,
                   originalWidth: selectedBlock.buttonWidth,

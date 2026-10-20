@@ -1,11 +1,13 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 import e from '../emailCampaign.module.css';
 export default function AppearanceColor({
   label,
+  icon,
   value,
   onChange,
 }: {
   label: string;
+  icon?: ReactNode;
   value: string;
   onChange: (value: string) => void;
 }) {
@@ -14,7 +16,11 @@ export default function AppearanceColor({
   useEffect(() => setText(value), [value]);
   return (
     <div className={e.field}>
-      <label className={e.fieldLabel} htmlFor={id}>
+      <label
+        className={`${e.fieldLabel} ${icon ? e.appearanceLabel : ''}`}
+        htmlFor={id}
+      >
+        {icon}
         {label}
       </label>
       <div className={e.appearanceColor}>

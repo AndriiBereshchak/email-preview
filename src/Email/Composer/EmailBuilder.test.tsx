@@ -558,6 +558,59 @@ it('moves an image horizontally to intermediate positions instead of snapping to
   });
 });
 
+it('moves an image into its own side-add area from either the image or its drag handle', () => {
+  const initial = fixture();
+  initial.sections[0].columns[0].blocks[1] = {
+    id: 'picture',
+    type: 'image',
+    widthPercent: 40,
+  };
+  const page = setup(initial);
+  const versions = page.document().versions;
+  const image = () =>
+    page.container.querySelector<HTMLElement>('[data-block-id="picture"] img')!;
+  fireEvent.click(image());
+  const initialLeft = image().getBoundingClientRect().left;
+  fireEvent.dragStart(image(), {
+    clientX: initialLeft + 10,
+    dataTransfer: transfer(),
+  });
+  const right = page.getByRole('button', {
+    name: 'Добавить справа от картинки',
+  });
+  fireEvent.dragOver(right, {
+    clientX: initialLeft + 110,
+    clientY: 110,
+    dataTransfer: transfer(),
+  });
+  fireEvent.drop(right, { dataTransfer: transfer() });
+  const moved = page.document().sections[0].columns[0].blocks[1];
+  expect(moved.type === 'image' && moved.offsetPercent).toBeCloseTo(
+    (100 / (264 * 0.6)) * 100,
+    1,
+  );
+  const handle = page.getByRole('button', { name: 'Переместить блок' });
+  fireEvent.dragStart(handle, {
+    clientX: initialLeft + 10,
+    dataTransfer: transfer(),
+  });
+  const left = page.getByRole('button', {
+    name: 'Добавить справа от картинки',
+  });
+  fireEvent.dragOver(left, {
+    clientX: initialLeft + 42,
+    clientY: 110,
+    dataTransfer: transfer(),
+  });
+  fireEvent.drop(left, { dataTransfer: transfer() });
+  const returned = page.document().sections[0].columns[0].blocks[1];
+  expect(returned.type === 'image' && returned.offsetPercent).toBeCloseTo(
+    (32 / (264 * 0.6)) * 100,
+    1,
+  );
+  expect(page.document().versions).toBe(versions);
+});
+
 it('moves the actual button horizontally and adds content beside its natural width', () => {
   const initial = fixture();
   initial.sections[0].columns[0].blocks = [{ id: 'cta', type: 'button' }];
@@ -569,15 +622,18 @@ it('moves the actual button horizontally and adds content beside its natural wid
   const page = setup(initial);
   const button = () =>
     page.container.querySelector<HTMLElement>('[data-email-button]')!;
-  const cell = () => button().closest<HTMLElement>('[data-block-id]')!;
   expect(button().draggable).toBe(true);
   fireEvent.dragStart(button(), { clientX: 210, dataTransfer: transfer() });
-  fireEvent.dragOver(cell(), {
+  expect(page.queryByRole('dialog')).toBeNull();
+  const freeSpace = page.getByRole('button', {
+    name: 'Добавить справа от кнопки',
+  });
+  fireEvent.dragOver(freeSpace, {
     clientX: 242,
     clientY: 50,
     dataTransfer: transfer(),
   });
-  fireEvent.drop(cell(), { dataTransfer: transfer() });
+  fireEvent.drop(freeSpace, { dataTransfer: transfer() });
   const moved = page.document().sections[0].columns[0].blocks[0];
   expect(moved.type).toBe('button');
   if (moved.type === 'button') expect(moved.insetPercent).toBeGreaterThan(0);
@@ -755,18 +811,18 @@ it('sets a section background with editable text above it and removes only the i
   const page = setup();
   const versions = page.document().versions;
   fireEvent.click(page.getByRole('button', { name: 'Настройки секции 1' }));
-  fireEvent.change(page.getByRole('textbox', { name: 'Фон секции' }), {
+  fireEvent.change(page.getByRole('textbox', { name: 'Фон' }), {
     target: { value: '#123456' },
   });
-  fireEvent.change(page.getByLabelText('Фон секции: изображение'), {
+  fireEvent.change(page.getByLabelText('Фон: изображение'), {
     target: {
       files: [
         new File(['background'], 'background.png', { type: 'image/png' }),
       ],
     },
   });
-  await page.findByAltText('Фон секции');
-  fireEvent.change(page.getByRole('textbox', { name: 'Цвет текста секции' }), {
+  await page.findByAltText('Фон');
+  fireEvent.change(page.getByRole('textbox', { name: 'Текст' }), {
     target: { value: '#ffffff' },
   });
   expect(page.document().sections[0]).toMatchObject({
@@ -900,6 +956,18 @@ it('uses colored outline buttons and section borders from the existing settings'
   };
   const page = setup(initial);
   fireEvent.click(page.getByRole('button', { name: 'Редактировать кнопку' }));
+  const filled = page.container.querySelector<HTMLElement>(
+    '[data-email-button]',
+  )!;
+  const spacing = (node: HTMLElement) =>
+    ['top', 'right', 'bottom', 'left'].map((side) => {
+      const style = node.style;
+      return (
+        parseFloat(style.getPropertyValue(`padding-${side}`)) +
+        parseFloat(style.getPropertyValue(`border-${side}-width`) || '0')
+      );
+    });
+  const filledSpacing = spacing(filled);
   fireEvent.change(page.getByRole('combobox', { name: 'Вид кнопки' }), {
     target: { value: 'outline' },
   });
@@ -913,12 +981,13 @@ it('uses colored outline buttons and section borders from the existing settings'
     '[data-email-button]',
   )!;
   expect(button.style.backgroundColor).toBe('transparent');
+  expect(spacing(button)).toEqual(filledSpacing);
   expect(button.style.borderColor).toBe('rgb(85, 255, 153)');
   expect(button.style.color).toBe('rgb(255, 255, 255)');
   fireEvent.click(page.getByRole('button', { name: 'Настройки секции 1' }));
   fireEvent.click(page.getByText('Рамка и углы'));
-  fireEvent.click(page.getByRole('checkbox', { name: 'Рамка секции' }));
-  fireEvent.change(page.getByRole('textbox', { name: 'Цвет рамки секции' }), {
+  fireEvent.click(page.getByRole('checkbox', { name: 'Рамка' }));
+  fireEvent.change(page.getByRole('textbox', { name: 'Цвет рамки' }), {
     target: { value: '#55ff99' },
   });
   fireEvent.change(page.getByRole('slider', { name: 'Закругление углов' }), {
@@ -928,4 +997,28 @@ it('uses colored outline buttons and section borders from the existing settings'
     borderColor: '#55ff99',
     borderRadius: 12,
   });
+});
+
+it('keeps settings beside the canvas and uses one toolbar for the selected text', () => {
+  const page = setup();
+  const editor = page.container.querySelector<HTMLElement>(
+    '[data-block-id="a"] [data-email-text]',
+  )!;
+  fireEvent.click(editor);
+  const settings = page.getByRole('button', { name: 'Настройки текста' });
+  const link = page.getByRole('button', { name: 'Ссылка в тексте' });
+  const remove = page.getByRole('button', { name: 'Удалить блок текст' });
+  expect(settings.parentElement).toBe(link.parentElement);
+  expect(settings.parentElement).toBe(remove.parentElement);
+  fireEvent.click(settings);
+  const panel = page.getByRole('dialog', { name: 'Оформление текста' });
+  expect(panel.contains(editor)).toBe(false);
+  expect(panel.previousElementSibling?.contains(editor)).toBe(true);
+  fireEvent.pointerDown(editor);
+  expect(page.getByRole('dialog', { name: 'Оформление текста' })).toBe(panel);
+  fireEvent.click(editor);
+  expect(page.queryByRole('dialog')).toBeNull();
+  fireEvent.click(page.getByRole('button', { name: 'Настройки текста' }));
+  fireEvent.click(page.getByRole('button', { name: 'Закрыть настройки' }));
+  expect(page.queryByRole('dialog')).toBeNull();
 });

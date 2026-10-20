@@ -92,9 +92,13 @@ export function renderEmailDocumentContent(
         background: appearanceColor(block.background, a.linkColor),
       });
       const dimensions = `${Number.isFinite(block.buttonWidth) ? `width:${Math.max(48, block.buttonWidth!)}px;` : ''}${Number.isFinite(block.paddingY) ? `padding-top:${Math.max(0, block.paddingY!)}px;padding-bottom:${Math.max(0, block.paddingY!)}px;` : ''}`;
+      const paddingY = Number.isFinite(block.paddingY)
+        ? Math.max(0, block.paddingY!)
+        : 12;
+
       const outline =
         block.variant === 'outline'
-          ? `background-color:transparent;border:1px solid ${appearanceColor(block.background, a.linkColor)};`
+          ? `background-color:transparent;border:1px solid ${appearanceColor(block.background, a.linkColor)};padding: ${Math.max(0, paddingY - 1)}px 23px;`
           : '';
       const style = `${buttonCss}${dimensions}${outline}color:${appearanceColor(block.color, block.variant === 'outline' ? appearanceColor(block.background, a.linkColor) : '#ffffff')};text-decoration:none;font-weight:bold;`;
       const draggable = options.editor

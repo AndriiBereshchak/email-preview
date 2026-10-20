@@ -1,9 +1,17 @@
 .builder {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
   min-width: 0;
+}
+.withSettings {
+  grid-template-columns: minmax(0, 1fr) 256px;
 }
 .surface {
   position: relative;
   min-height: 340px;
+  min-width: 0;
   padding-bottom: 24px;
 }
 .paper {
@@ -92,7 +100,8 @@
   outline: 2px solid #ffffffaa;
   pointer-events: none;
 }
-.popover {
+.popover,
+.settingsPanel {
   position: absolute;
   z-index: 12;
   width: 256px;
@@ -107,6 +116,35 @@
   font-size: 13px;
   line-height: 1.5;
 }
+.settingsPanel {
+  position: sticky;
+  top: 16px;
+  width: auto;
+  min-width: 0;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  box-shadow: none;
+}
+.settingsPanel label[for],
+.settingsPanel label > span {
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 12px;
+}
+.settingsPanel :global(.custom-input) {
+  font-size: 13px;
+  min-height: 36px;
+  padding: 7px 9px;
+}
+.settingsPanel p {
+  font-size: 11px;
+}
+.settingsPanel > .columnSettings {
+  max-height: none;
+  overflow: visible;
+  padding: 0;
+}
 .popoverHead {
   display: flex;
   align-items: center;
@@ -118,6 +156,8 @@
   font-size: 14px;
 }
 .popoverHead button {
+  display: grid;
+  place-items: center;
   background: none;
   color: var(--muted);
   font-size: 22px;
@@ -191,9 +231,6 @@
   border-color: #68bb8a;
 }
 .columnSettings {
-  max-height: min(65vh, 600px);
-  overflow-y: auto;
-  padding-right: 4px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -223,15 +260,6 @@
   color: #2e7a55;
   cursor: pointer;
 }
-.removeBlockInPanel {
-  margin-top: 14px;
-  background: transparent;
-  color: var(--danger);
-  cursor: pointer;
-}
-.removeBlockInPanel:hover {
-  color: var(--danger);
-}
 
 .canvasControls {
   position: absolute;
@@ -250,28 +278,66 @@
   touch-action: none;
   user-select: none;
 }
-.sectionDrag,
-.blockDrag {
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border-radius: 4px;
-  background: #f2f8f4;
-  color: #428260;
-  font-size: 18px;
-  line-height: 22px;
-  cursor: grab;
-  opacity: 0.65;
+.sectionToolbar,
+.blockToolbar {
+  position: absolute;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid #d7e3db;
+  border-radius: 6px;
+  background: white;
+  box-shadow: 0 2px 8px #20252b12;
+  pointer-events: auto;
 }
-.sectionDrag:hover,
-.blockDrag:hover,
-.sectionDrag:focus-visible,
-.blockDrag:focus-visible {
+.sectionToolbar {
+  flex-direction: column;
+  top: 8px;
+  left: -30px;
+  opacity: 0.6;
+}
+.sectionTools[data-block-selected] .sectionToolbar {
+  opacity: 0;
+}
+.sectionToolbar:hover,
+.sectionToolbar:focus-within,
+.sectionTools[data-block-selected] .sectionToolbar:hover,
+.sectionTools[data-block-selected] .sectionToolbar:focus-within {
   opacity: 1;
-  background: #dcefe3;
 }
-.sectionDrag:active,
-.blockDrag:active {
+.sectionToolbar button,
+.blockToolbar button {
+  position: static;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 4px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #49765d;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.sectionToolbar svg,
+.blockToolbar svg {
+  pointer-events: none;
+}
+.sectionToolbar .sectionDelete,
+.blockToolbar .textDelete {
+  color: var(--danger);
+}
+.sectionToolbar button:hover,
+.blockToolbar button:hover {
+  background: #edf6f0;
+}
+.sectionToolbar .sectionDrag,
+.blockToolbar .blockDrag {
+  cursor: grab;
+}
+.sectionToolbar .sectionDrag:active,
+.blockToolbar .blockDrag:active {
   cursor: grabbing;
 }
 .imageResize,
@@ -317,10 +383,12 @@
 .blockDrag {
   opacity: 1;
 }
-.canvas :global([data-block-id]) img {
+.canvas :global([data-block-id]) img,
+.canvas :global([data-email-button]) {
   cursor: grab;
 }
-.canvas :global([data-block-id]) img:active {
+.canvas :global([data-block-id]) img:active,
+.canvas :global([data-email-button]):active {
   cursor: grabbing;
 }
 .imageAlignment {
@@ -391,17 +459,29 @@
 }
 .insertChoices {
   display: flex;
-  gap: 6px;
+  gap: 8px;
 }
 .insertChoices button {
-  flex: 1;
-  padding: 9px 6px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 36px;
+  padding: 8px 4px;
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: 7px;
   background: white;
   color: var(--text);
   font-size: 12px;
+  white-space: nowrap;
   cursor: pointer;
+}
+.insertChoices button svg {
+  flex-shrink: 0;
+  color: #49765d;
 }
 .insertChoices button:hover,
 .insertChoices button:focus-visible {
@@ -427,31 +507,6 @@
   justify-content: flex-end;
   pointer-events: none;
 }
-.sectionSettings,
-.sectionDelete {
-  position: absolute;
-  top: 34px;
-  left: -22px;
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 24px;
-  padding: 0;
-  border: 0;
-  border-radius: 4px;
-  background: #f2f8f4;
-  color: #49765d;
-  pointer-events: auto;
-  cursor: pointer;
-}
-.sectionDelete {
-  top: 60px;
-  color: var(--danger);
-}
-.sectionDelete:hover {
-  background: #fceeee;
-}
-.removeBlockInPanel,
 .columnRow button:last-child:not(:first-child) {
   display: inline-grid;
   place-items: center;
@@ -512,23 +567,6 @@
   color: #84928b;
   pointer-events: none;
 }
-.textDelete,
-.textLink,
-.textSettings {
-  position: absolute;
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 24px;
-  padding: 4px;
-  border: 1px solid #d7e3db;
-  border-radius: 4px;
-  background: white;
-  color: var(--danger);
-  pointer-events: auto;
-  cursor: pointer;
-}
-
 .textResize {
   height: 24px;
   cursor: ew-resize;
@@ -547,16 +585,12 @@
   background: #3e9a67;
 }
 
-.textLink,
-.textSettings {
-  color: #49765d;
-}
-
 .sectionGroup {
   border-top: 1px solid var(--border);
   padding-top: 10px;
 }
 .sectionGroup summary {
+  font-size: 13px;
   cursor: pointer;
   font-weight: 600;
   padding: 4px 0;
@@ -567,10 +601,47 @@
 .rangeLabels {
   display: flex;
   justify-content: space-between;
-  color: var(--text-muted);
-  font-size: 12px;
+  color: var(--muted);
+  font-size: 11px;
 }
 .sectionGroup input[type='range'] {
   width: 100%;
   accent-color: #2e7a55;
+}
+
+@media (max-width: 760px) {
+  .withSettings {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .settingsPanel {
+    position: static;
+    width: 100%;
+    max-height: 60vh;
+  }
+}
+
+.sectionToggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+}
+.sectionToggle input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #2e7a55;
+}
+.imageHint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--muted);
+}
+.imageHint svg {
+  flex-shrink: 0;
 }

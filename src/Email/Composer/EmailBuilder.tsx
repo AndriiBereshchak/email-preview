@@ -30,7 +30,15 @@ import AppearanceColor from './AppearanceColor';
 import TextBlockSettings from './TextBlockSettings';
 import { readEmailText } from '../../utils/emailText';
 import AppearanceBackgroundImage from './AppearanceBackgroundImage';
-import { Trash2, Upload } from 'lucide-react';
+import {
+  Image as ImageIcon,
+  Info,
+  MousePointer2,
+  Trash2,
+  Type,
+  Upload,
+  X,
+} from 'lucide-react';
 import { Field } from '../Field';
 import e from './emailBuilder.module.css';
 
@@ -201,8 +209,6 @@ export default function EmailBuilder({
     left: number;
     width: number;
     height: number;
-    panelTop: number;
-    panelLeft: number;
   } | null>(null);
   const surface = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLDivElement>(null);
@@ -226,6 +232,12 @@ export default function EmailBuilder({
     ? (document.versions[locale]?.blocks[selectedBlock.id] ??
       emptyEmailBlockContent(selectedBlock.type))
     : undefined;
+  const settingsVisible = Boolean(
+    !insertion &&
+    target &&
+    (columnsOpen ||
+      (selectedBlock && (selectedBlock.type !== 'text' || textSettingsOpen))),
+  );
   const updateSection = (changes: Partial<EmailSection>) => {
     if (!target) return;
     const id = target.section.id;
@@ -272,6 +284,7 @@ export default function EmailBuilder({
         !(node instanceof Element) ||
         popover.current?.contains(node) ||
         insertionMenu.current?.contains(node) ||
+        canvas.current?.contains(node) ||
         node.closest(`.${e.canvasControls}`)
       )
         return;
@@ -335,16 +348,11 @@ export default function EmailBuilder({
       const bounds = node.getBoundingClientRect();
       const left = bounds.left - host.left;
       const top = bounds.top - host.top;
-      const fitsRight = left + bounds.width + 272 <= host.width;
       setPosition({
         top,
         left,
         width: Math.max(24, bounds.width),
         height: Math.max(24, bounds.height),
-        panelLeft: fitsRight
-          ? left + bounds.width + 16
-          : Math.max(0, Math.min(left, host.width - 256)),
-        panelTop: fitsRight ? Math.max(0, top) : top + bounds.height + 16,
       });
     };
     measure();
@@ -358,7 +366,7 @@ export default function EmailBuilder({
       observer?.disconnect();
       window.removeEventListener('resize', measure);
     };
-  }, [html, selection, columnsOpen, selectedBlock?.id]);
+  }, [html, selection, columnsOpen, selectedBlock?.id, settingsVisible]);
 
   useEffect(() => {
     if (selectedBlock?.type === 'text' && !columnsOpen && !textSettingsOpen) {
@@ -389,6 +397,7 @@ export default function EmailBuilder({
     if ('key' in event && event.key !== 'Enter' && event.key !== ' ') return;
     const column = node.closest<HTMLElement>('[data-column-id]');
     if (!column || !canvas.current?.contains(column)) return;
+    setTextSettingsOpen(null);
     if (!node.closest('[data-email-text]') || node.closest('a'))
       event.preventDefault();
     const add = node.closest<HTMLElement>('[data-add-column-id]');
@@ -617,7 +626,7 @@ export default function EmailBuilder({
   };
   return (
     <div
-      className={e.builder}
+      className={`${e.builder} ${settingsVisible ? e.withSettings : ''}`}
       onKeyDown={(event) => {
         if (event.key === 'Escape') closeSettings();
       }}
@@ -722,6 +731,7 @@ export default function EmailBuilder({
           )}
         <EmailCanvasControls
           document={document}
+          settingsOpen={settingsVisible}
           canvas={canvas}
           surface={surface}
           columnId={selection?.columnId}
@@ -790,69 +800,87 @@ export default function EmailBuilder({
                 aria-label="Закрыть выбор блока"
                 onClick={closeSettings}
               >
-                ×
+                <X size={16} strokeWidth={1.7} aria-hidden="true" />
               </button>
             </div>
             <div className={e.insertChoices}>
-              {(['text', 'image', 'button'] as const).map((type) => (
+              {(
+                [
+                  { type: 'text', Icon: Type },
+                  { type: 'image', Icon: ImageIcon },
+                  { type: 'button', Icon: MousePointer2 },
+                ] as const
+              ).map(({ type, Icon }) => (
                 <button
                   type="button"
                   key={type}
                   data-block-type={type}
                   onClick={() => addBlock(type)}
                 >
-                  {labels[type]}
+                  <Icon size={16} strokeWidth={1.7} aria-hidden="true" />
+                  <span>{labels[type]}</span>
                 </button>
               ))}
             </div>
           </div>
         )}
-        {!insertion &&
-          !manipulating &&
-          ((selectedBlock &&
-            (selectedBlock.type !== 'text' || textSettingsOpen)) ||
-            columnsOpen) &&
-          target && (
-            <div
-              ref={popover}
-              className={e.popover}
-              role="dialog"
-              aria-label={
-                columnsOpen
-                  ? 'Настройки секции'
-                  : selectedBlock?.type === 'text'
-                    ? textSettingsOpen === 'link'
-                      ? 'Ссылка в тексте'
-                      : 'Оформление текста'
-                    : `Настройки блока ${labels[selectedBlock!.type].toLowerCase()}`
-              }
-              style={{
-                top: position?.panelTop ?? 16,
-                left: position?.panelLeft ?? 16,
-              }}
+        {document.sections.length > 0 && (
+          <button type="button" className={e.addSection} onClick={addSection}>
+            + Добавить секцию
+          </button>
+        )}
+      </div>
+      {settingsVisible && target && (
+        <div
+          ref={popover}
+          className={e.settingsPanel}
+          role="dialog"
+          aria-label={
+            columnsOpen
+              ? 'Настройки секции'
+              : selectedBlock?.type === 'text'
+                ? textSettingsOpen === 'link'
+                  ? 'Ссылка в тексте'
+                  : 'Оформление текста'
+                : `Настройки блока ${labels[selectedBlock!.type].toLowerCase()}`
+          }
+        >
+          <div className={e.popoverHead}>
+            <strong>
+              {columnsOpen
+                ? 'Секция'
+                : selectedBlock?.type === 'text'
+                  ? textSettingsOpen === 'link'
+                    ? 'Ссылка'
+                    : 'Оформление текста'
+                  : labels[selectedBlock!.type]}
+            </strong>
+            <button
+              type="button"
+              aria-label="Закрыть настройки"
+              onClick={closeSettings}
             >
-              <div className={e.popoverHead}>
-                <strong>
-                  {columnsOpen
-                    ? 'Секция'
-                    : selectedBlock?.type === 'text'
-                      ? textSettingsOpen === 'link'
-                        ? 'Ссылка'
-                        : 'Оформление текста'
-                      : labels[selectedBlock!.type]}
-                </strong>
-                <button
-                  type="button"
-                  aria-label="Закрыть настройки"
-                  onClick={closeSettings}
-                >
-                  ×
-                </button>
-              </div>
-              {columnsOpen ? (
-                <div className={e.columnSettings}>
+              <X size={16} strokeWidth={1.7} aria-hidden="true" />
+            </button>
+          </div>
+          {columnsOpen ? (
+            <div className={e.columnSettings} key={target.section.id}>
+              <details
+                className={e.sectionGroup}
+                name={`section-settings-${target.section.id}`}
+                open
+              >
+                <summary>Фон и цвета</summary>
+                <div className={e.fields}>
                   <AppearanceColor
-                    label="Фон секции"
+                    label="Фон"
+                    icon={
+                      <ImageIcon
+                        size={16}
+                        strokeWidth={1.7}
+                        aria-hidden="true"
+                      />
+                    }
                     value={
                       target.section.background ??
                       document.appearance.background
@@ -861,262 +889,242 @@ export default function EmailBuilder({
                   />
                   <AppearanceBackgroundImage
                     key={target.section.id}
-                    label="Фон секции"
+                    label="Фон"
+                    compact
                     value={target.section.backgroundImage ?? ''}
                     onChange={(backgroundImage) =>
                       updateSection({ backgroundImage })
                     }
                   />
+                  <p
+                    className={e.imageHint}
+                    title="Изображение заполняет фон; края могут обрезаться."
+                  >
+                    <Info size={14} strokeWidth={1.7} aria-hidden="true" />
+                    PNG, JPG, GIF, WebP · до 15 МБ
+                  </p>
                   <AppearanceColor
-                    label="Цвет текста секции"
+                    label="Текст"
+                    icon={
+                      <Type size={16} strokeWidth={1.7} aria-hidden="true" />
+                    }
                     value={
                       target.section.textColor ?? document.appearance.textColor
                     }
                     onChange={(textColor) => updateSection({ textColor })}
                   />
-                  <details className={e.sectionGroup}>
-                    <summary>Рамка и углы</summary>
-                    <div className={e.fields}>
-                      <label className={e.hint}>
-                        <input
-                          type="checkbox"
-                          checked={Boolean(target.section.borderColor)}
-                          onChange={(event) =>
-                            updateSection({
-                              borderColor: event.target.checked
-                                ? document.appearance.linkColor
-                                : undefined,
-                            })
-                          }
-                        />{' '}
-                        Рамка секции
-                      </label>
-                      {target.section.borderColor && (
-                        <AppearanceColor
-                          label="Цвет рамки секции"
-                          value={target.section.borderColor}
-                          onChange={(borderColor) =>
-                            updateSection({ borderColor })
-                          }
-                        />
-                      )}
-                      <Field label="Закругление углов">
-                        <input
-                          type="range"
-                          min={0}
-                          max={48}
-                          value={target.section.borderRadius ?? 0}
-                          onChange={(event) =>
-                            updateSection({
-                              borderRadius: Number(event.target.value),
-                            })
-                          }
-                        />
-                      </Field>
-                      <div className={e.rangeLabels}>
-                        <span>Прямые</span>
-                        <span>Закруглённые</span>
-                      </div>
-                    </div>
-                  </details>
-                  <p className={e.hint}>
-                    Добавьте текст в эту секцию — он будет поверх фона.
-                    Оформление общее для всех языков.
-                  </p>
-                  <details className={e.sectionGroup}>
-                    <summary>Колонки</summary>
-                    <div className={e.fields}>
-                      {target.section.columns.map((column, index) => (
-                        <div className={e.columnRow} key={column.id}>
-                          <button
-                            type="button"
-                            aria-pressed={column.id === target.column.id}
-                            onClick={() =>
-                              setSelection({ columnId: column.id })
-                            }
-                          >
-                            Колонка {index + 1}
-                          </button>
-                          {target.section.columns.length > 1 && (
-                            <button
-                              type="button"
-                              aria-label={`Удалить колонку ${index + 1}`}
-                              onClick={() => deleteColumn(column.id)}
-                            >
-                              <Trash2
-                                size={16}
-                                strokeWidth={1.7}
-                                aria-hidden="true"
-                                focusable="false"
-                              />
-                            </button>
-                          )}
-                        </div>
-                      ))}
+                </div>
+              </details>
+              <details
+                className={e.sectionGroup}
+                name={`section-settings-${target.section.id}`}
+              >
+                <summary>Рамка и углы</summary>
+                <div className={e.fields}>
+                  <label className={e.sectionToggle}>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(target.section.borderColor)}
+                      onChange={(event) =>
+                        updateSection({
+                          borderColor: event.target.checked
+                            ? document.appearance.linkColor
+                            : undefined,
+                        })
+                      }
+                    />
+                    Рамка
+                  </label>
+                  {target.section.borderColor && (
+                    <AppearanceColor
+                      label="Цвет рамки"
+                      value={target.section.borderColor}
+                      onChange={(borderColor) => updateSection({ borderColor })}
+                    />
+                  )}
+                  <Field label="Закругление углов">
+                    <input
+                      type="range"
+                      min={0}
+                      max={48}
+                      value={target.section.borderRadius ?? 0}
+                      onChange={(event) =>
+                        updateSection({
+                          borderRadius: Number(event.target.value),
+                        })
+                      }
+                    />
+                  </Field>
+                  <div className={e.rangeLabels}>
+                    <span>Прямые</span>
+                    <span>Закруглённые</span>
+                  </div>
+                </div>
+              </details>
+              <details
+                className={e.sectionGroup}
+                name={`section-settings-${target.section.id}`}
+              >
+                <summary>Колонки</summary>
+                <div className={e.fields}>
+                  {target.section.columns.map((column, index) => (
+                    <div className={e.columnRow} key={column.id}>
                       <button
                         type="button"
-                        className={e.addColumn}
-                        onClick={() => addColumn(target.section.id)}
+                        aria-pressed={column.id === target.column.id}
+                        onClick={() => setSelection({ columnId: column.id })}
                       >
-                        + Колонка справа
+                        Колонка {index + 1}
                       </button>
-                    </div>
-                  </details>
-                </div>
-              ) : (
-                <>
-                  {(selectedBlock?.type === 'image' ||
-                    selectedBlock?.type === 'button') && (
-                    <div
-                      className={e.imageAlignment}
-                      role="group"
-                      aria-label={
-                        selectedBlock.type === 'image'
-                          ? 'Расположение картинки'
-                          : 'Расположение кнопки'
-                      }
-                    >
-                      {(['left', 'center', 'right'] as const).map(
-                        (alignment, index) => (
-                          <button
-                            type="button"
-                            key={alignment}
-                            aria-pressed={
-                              (selectedBlock.alignment ?? 'left') === alignment
-                            }
-                            onClick={() =>
-                              onChange((current) =>
-                                updateEmailBlock(
-                                  current,
-                                  selectedBlock.id,
-                                  (block) =>
-                                    block.type === 'image' ||
-                                    block.type === 'button'
-                                      ? {
-                                          ...block,
-                                          alignment,
-                                          ...(block.type === 'image'
-                                            ? { offsetPercent: undefined }
-                                            : { insetPercent: undefined }),
-                                        }
-                                      : block,
-                                ),
-                              )
-                            }
-                          >
-                            {['Слева', 'По центру', 'Справа'][index]}
-                          </button>
-                        ),
+                      {target.section.columns.length > 1 && (
+                        <button
+                          type="button"
+                          aria-label={`Удалить колонку ${index + 1}`}
+                          onClick={() => deleteColumn(column.id)}
+                        >
+                          <Trash2
+                            size={16}
+                            strokeWidth={1.7}
+                            aria-hidden="true"
+                            focusable="false"
+                          />
+                        </button>
                       )}
                     </div>
-                  )}
-                  {selectedBlock?.type === 'text' &&
-                    selectedContent?.type === 'text' && (
-                      <TextBlockSettings
-                        key={`${selectedBlock.id}-${locale}-${textSettingsOpen}`}
-                        mode={textSettingsOpen === 'link' ? 'link' : 'style'}
-                        block={selectedBlock}
-                        content={selectedContent}
-                        selection={textSelection}
-                        textColor={
-                          target.section.textColor ??
-                          document.appearance.textColor
+                  ))}
+                  <button
+                    type="button"
+                    className={e.addColumn}
+                    onClick={() => addColumn(target.section.id)}
+                  >
+                    + Колонка справа
+                  </button>
+                </div>
+              </details>
+            </div>
+          ) : (
+            <>
+              {(selectedBlock?.type === 'image' ||
+                selectedBlock?.type === 'button') && (
+                <div
+                  className={e.imageAlignment}
+                  role="group"
+                  aria-label={
+                    selectedBlock.type === 'image'
+                      ? 'Расположение картинки'
+                      : 'Расположение кнопки'
+                  }
+                >
+                  {(['left', 'center', 'right'] as const).map(
+                    (alignment, index) => (
+                      <button
+                        type="button"
+                        key={alignment}
+                        aria-pressed={
+                          (selectedBlock.alignment ?? 'left') === alignment
                         }
-                        onStyle={(changes) =>
+                        onClick={() =>
                           onChange((current) =>
                             updateEmailBlock(
                               current,
                               selectedBlock.id,
                               (block) =>
-                                block.type === 'text'
-                                  ? { ...block, ...changes }
+                                block.type === 'image' ||
+                                block.type === 'button'
+                                  ? {
+                                      ...block,
+                                      alignment,
+                                      ...(block.type === 'image'
+                                        ? { offsetPercent: undefined }
+                                        : { insetPercent: undefined }),
+                                    }
                                   : block,
                             ),
                           )
                         }
-                        onContent={(content) =>
-                          updateContent(selectedBlock.id, locale, content)
-                        }
-                      />
-                    )}
-                  {selectedBlock?.type === 'button' && (
-                    <div className={e.fields}>
-                      <Field label="Вид кнопки">
-                        <select
-                          className="custom-input"
-                          value={selectedBlock.variant ?? 'filled'}
-                          onChange={(event) => {
-                            const variant = event.target.value as
-                              | 'filled'
-                              | 'outline';
-                            updateButtonStyle({ variant });
-                          }}
-                        >
-                          <option value="filled">С заливкой</option>
-                          <option value="outline">Только контур</option>
-                        </select>
-                      </Field>
-                      <AppearanceColor
-                        label={
-                          selectedBlock.variant === 'outline'
-                            ? 'Цвет контура кнопки'
-                            : 'Фон кнопки'
-                        }
-                        value={
-                          selectedBlock.background ??
-                          document.appearance.linkColor
-                        }
-                        onChange={(background) =>
-                          updateButtonStyle({ background })
-                        }
-                      />
-                      <AppearanceColor
-                        label="Цвет текста кнопки"
-                        value={
-                          selectedBlock.color ??
-                          (selectedBlock.variant === 'outline'
-                            ? (selectedBlock.background ??
-                              document.appearance.linkColor)
-                            : '#ffffff')
-                        }
-                        onChange={(color) =>
-                          updateButtonStyle({ color })
-                        }
-                      />
-                    </div>
+                      >
+                        {['Слева', 'По центру', 'Справа'][index]}
+                      </button>
+                    ),
                   )}
-                  <BlockFields
-                    content={selectedContent!}
-                    onChange={(value) =>
-                      updateContent(selectedBlock!.id, locale, value)
+                </div>
+              )}
+              {selectedBlock?.type === 'text' &&
+                selectedContent?.type === 'text' && (
+                  <TextBlockSettings
+                    key={`${selectedBlock.id}-${locale}-${textSettingsOpen}`}
+                    mode={textSettingsOpen === 'link' ? 'link' : 'style'}
+                    block={selectedBlock}
+                    content={selectedContent}
+                    selection={textSelection}
+                    textColor={
+                      target.section.textColor ?? document.appearance.textColor
+                    }
+                    onStyle={(changes) =>
+                      onChange((current) =>
+                        updateEmailBlock(current, selectedBlock.id, (block) =>
+                          block.type === 'text'
+                            ? { ...block, ...changes }
+                            : block,
+                        ),
+                      )
+                    }
+                    onContent={(content) =>
+                      updateContent(selectedBlock.id, locale, content)
                     }
                   />
-                  {selectedBlock?.type !== 'text' && (
-                    <button
-                      type="button"
-                      className={e.removeBlockInPanel}
-                      title="Удалить блок"
-                      aria-label={`Удалить блок ${labels[selectedBlock!.type].toLowerCase()}`}
-                      onClick={() => deleteBlock(selectedBlock!.id)}
+                )}
+              {selectedBlock?.type === 'button' && (
+                <div className={e.fields}>
+                  <Field label="Вид кнопки">
+                    <select
+                      className="custom-input"
+                      value={selectedBlock.variant ?? 'filled'}
+                      onChange={(event) => {
+                        const variant = event.target.value as
+                          | 'filled'
+                          | 'outline';
+                        updateButtonStyle({ variant });
+                      }}
                     >
-                      <Trash2
-                        size={16}
-                        strokeWidth={1.7}
-                        aria-hidden="true"
-                        focusable="false"
-                      />
-                    </button>
-                  )}
-                </>
+                      <option value="filled">С заливкой</option>
+                      <option value="outline">Только контур</option>
+                    </select>
+                  </Field>
+                  <AppearanceColor
+                    label={
+                      selectedBlock.variant === 'outline'
+                        ? 'Цвет контура кнопки'
+                        : 'Фон кнопки'
+                    }
+                    value={
+                      selectedBlock.background ?? document.appearance.linkColor
+                    }
+                    onChange={(background) => updateButtonStyle({ background })}
+                  />
+                  <AppearanceColor
+                    label="Цвет текста кнопки"
+                    value={
+                      selectedBlock.color ??
+                      (selectedBlock.variant === 'outline'
+                        ? (selectedBlock.background ??
+                          document.appearance.linkColor)
+                        : '#ffffff')
+                    }
+                    onChange={(color) => updateButtonStyle({ color })}
+                  />
+                </div>
               )}
-            </div>
+              <BlockFields
+                content={selectedContent!}
+                onChange={(value) =>
+                  updateContent(selectedBlock!.id, locale, value)
+                }
+              />
+            </>
           )}
-        {document.sections.length > 0 && (
-          <button type="button" className={e.addSection} onClick={addSection}>
-            + Добавить секцию
-          </button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

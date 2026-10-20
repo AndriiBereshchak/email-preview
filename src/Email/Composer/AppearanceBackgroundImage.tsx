@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import { ImagePlus } from 'lucide-react';
 import { readAppearanceImage } from '../../utils/appearanceImage';
 import e from '../emailCampaign.module.css';
 
@@ -6,7 +7,9 @@ export default function AppearanceBackgroundImage({
   label,
   value,
   onChange,
+  compact = false,
 }: {
+  compact?: boolean;
   label: string;
   value: string;
   onChange: (value: string) => void;
@@ -46,9 +49,11 @@ export default function AppearanceBackgroundImage({
   };
   return (
     <div className={e.field}>
-      <label className={e.fieldLabel} htmlFor={id}>
-        {label}: изображение
-      </label>
+      {!compact && (
+        <label className={e.fieldLabel} htmlFor={id}>
+          {label}: изображение
+        </label>
+      )}
       {value && (
         <img className={e.backgroundThumbnail} src={value} alt={label} />
       )}
@@ -56,6 +61,7 @@ export default function AppearanceBackgroundImage({
         id={id}
         ref={input}
         type="file"
+        aria-label={`${label}: изображение`}
         hidden
         accept=".png,.jpg,.jpeg,.gif,.webp"
         onChange={(event) => {
@@ -64,15 +70,20 @@ export default function AppearanceBackgroundImage({
       />
       <button
         type="button"
-        className={e.linkBtn}
+        className={compact ? e.backgroundUpload : e.linkBtn}
         disabled={loading}
         onClick={() => input.current?.click()}
       >
+        {compact && (
+          <ImagePlus size={16} strokeWidth={1.7} aria-hidden="true" />
+        )}
         {loading
           ? 'Загружаем…'
           : value
             ? 'Заменить изображение'
-            : 'Загрузить изображение'}
+            : compact
+              ? 'Добавить изображение'
+              : 'Загрузить изображение'}
       </button>
       {(value || loading) && (
         <button
@@ -89,10 +100,12 @@ export default function AppearanceBackgroundImage({
           Убрать изображение
         </button>
       )}
-      <p className={e.fieldHint}>
-        PNG, JPEG, GIF или WebP до 15 МБ. Изображение заполняет фон; края могут
-        обрезаться.
-      </p>
+      {!compact && (
+        <p className={e.fieldHint}>
+          PNG, JPEG, GIF или WebP до 15 МБ. Изображение заполняет фон; края
+          могут обрезаться.
+        </p>
+      )}
       {error && (
         <p className={e.alert} role="alert">
           {error}

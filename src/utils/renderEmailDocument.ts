@@ -31,7 +31,11 @@ export function renderEmailDocumentContent(
   const a = normalizeAppearance(document.appearance);
   const plain: string[] = [];
 
-  const renderBlock = (block: EmailBlock, inline = false): string => {
+  const renderBlock = (
+    block: EmailBlock,
+    section: EmailSection,
+    inline = false,
+  ): string => {
     const content: EmailBlockContent | undefined = Object.hasOwn(
       version.blocks,
       block.id,
@@ -51,10 +55,14 @@ export function renderEmailDocumentContent(
         block.variant === 'heading'
           ? 'font-size:24px;line-height:1.3;font-weight:bold;'
           : '';
+      const width =
+        !inline && Number.isFinite(block.widthPercent)
+          ? `width:${Math.max(1, Math.min(100, block.widthPercent!))}%;`
+          : '';
       const editable = options.editor
         ? ' data-email-text contenteditable="plaintext-only" tabindex="0" role="textbox" aria-label="Текст письма" aria-multiline="true" data-placeholder="Напишите текст письма…"'
         : '';
-      html = `<${tag}${editable} style="margin:0;color:${a.textColor};${style}">${lines(content.text)}</${tag}>`;
+      html = `<${tag}${editable} style="margin:0;color:${appearanceColor(section.textColor, a.textColor)};${style}${width}">${lines(content.text)}</${tag}>`;
       plain.push(content.text);
     } else if (block.type === 'image' && content.type === 'image') {
       const src = emailImageUrl(content.src);
@@ -135,7 +143,7 @@ export function renderEmailDocumentContent(
             const insert = options.editor
               ? addButton(row[0].id, firstIndex)
               : '';
-            if (row.length === 1) return insert + renderBlock(row[0]);
+            if (row.length === 1) return insert + renderBlock(row[0], section);
             const total = row.reduce(
               (sum, block) => sum + (block.widthPercent ?? 1),
               0,
@@ -143,7 +151,7 @@ export function renderEmailDocumentContent(
             const cells = row
               .map(
                 (block) =>
-                  `<td class="email-inline-cell" width="${(((block.widthPercent ?? 1) / total) * 100).toFixed(4)}%" valign="top" style="vertical-align:top;padding:0 4px;width:${(((block.widthPercent ?? 1) / total) * 100).toFixed(4)}%;">${table(renderBlock(block, true), 'table-layout:fixed;')}</td>`,
+                  `<td class="email-inline-cell" width="${(((block.widthPercent ?? 1) / total) * 100).toFixed(4)}%" valign="top" style="vertical-align:top;padding:0 4px;width:${(((block.widthPercent ?? 1) / total) * 100).toFixed(4)}%;">${table(renderBlock(block, section, true), 'table-layout:fixed;')}</td>`,
               )
               .join('');
             return (
@@ -168,8 +176,11 @@ export function renderEmailDocumentContent(
       })
       .join('');
     const content = `<!--[if mso]><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="${sectionWidth}"><tr><![endif]-->${columns}<!--[if mso]></tr></table><![endif]-->`;
-    const style = `${section.background ? `background-color:${appearanceColor(section.background, a.background)};` : ''}${backgroundImageCss(section.backgroundImage ?? '')}${borderColor ? `border:1px solid ${borderColor};` : ''}border-radius:${radius}px;`;
-    return `<tr><td${options.editor ? ` role="region" aria-label="Секция ${sectionIndex + 1}"` : ''} style="padding:0 0 16px;">${table(`<tr><td style="padding:16px;font-size:0;text-align:left;">${content}</td></tr>`, style, `data-section-id="${escapeHtml(section.id)}"`)}</td></tr>`;
+    const height = Number.isFinite(section.minHeight)
+      ? `height:${Math.max(0, Math.round(section.minHeight!))}px;`
+      : '';
+    const style = `${height}${section.background ? `background-color:${appearanceColor(section.background, a.background)};` : ''}${backgroundImageCss(section.backgroundImage ?? '')}${borderColor ? `border:1px solid ${borderColor};` : ''}border-radius:${radius}px;`;
+    return `<tr><td${options.editor ? ` role="region" aria-label="Секция ${sectionIndex + 1}"` : ''} style="padding:0 0 16px;">${table(`<tr><td valign="top" style="padding:16px;font-size:0;text-align:left;vertical-align:top;">${content}</td></tr>`, style, `data-section-id="${escapeHtml(section.id)}"`)}</td></tr>`;
   };
   const sections = document.sections.map(renderSection).join('');
   return {

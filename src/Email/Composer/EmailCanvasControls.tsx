@@ -13,7 +13,7 @@ import {
   moveEmailSection,
   emailBlockRows,
   placeEmailBlockBeside,
-  resizeEmailImage,
+  resizeEmailBlockWidth,
   updateEmailBlock,
 } from '../../utils/emailDocumentLayout';
 import e from './emailBuilder.module.css';
@@ -22,6 +22,7 @@ import { SlidersHorizontal, Trash2 } from 'lucide-react';
 type Box = {
   image?: boolean;
   button?: boolean;
+  text?: boolean;
   cellLeft?: number;
   cellWidth?: number;
   id: string;
@@ -48,7 +49,7 @@ type Drop = Dragged & {
 };
 type Resize = { pointerId: number; startX: number; width: number } & (
   | {
-      type: 'image';
+      type: 'image' | 'text';
       id: string;
       columnWidth: number;
       original?: number;
@@ -64,6 +65,13 @@ type Resize = { pointerId: number; startX: number; width: number } & (
       paddingY: number;
       originalWidth?: number;
       originalPaddingY?: number;
+    }
+  | {
+      type: 'section';
+      id: string;
+      startY: number;
+      height: number;
+      original?: number;
     }
   | {
       type: 'columns';
@@ -137,13 +145,16 @@ export default function EmailCanvasControls({
         Array.from(content.querySelectorAll<HTMLElement>(`[${attribute}]`)).map(
           (cell) => {
             const node = image
-              ? (cell.querySelector('img, [data-email-button]') ?? cell)
+              ? (cell.querySelector(
+                  'img, [data-email-button], [data-email-text]',
+                ) ?? cell)
               : cell;
             const rect = node.getBoundingClientRect();
             const cellRect = cell.getBoundingClientRect();
             return {
               image: image && node.tagName === 'IMG',
               button: image && node.hasAttribute('data-email-button'),
+              text: image && node.hasAttribute('data-email-text'),
               cellLeft: cellRect.left - origin.left,
               cellWidth: cellRect.width,
               id: cell.getAttribute(attribute)!,
@@ -449,8 +460,15 @@ export default function EmailCanvasControls({
     surface,
   ]);
 
-  const imageWidth = (id: string, widthPercent?: number) =>
-    onChange((current) => resizeEmailImage(current, id, widthPercent));
+  const blockWidth = (id: string, widthPercent?: number) =>
+    onChange((current) => resizeEmailBlockWidth(current, id, widthPercent));
+  const sectionHeight = (id: string, minHeight?: number) =>
+    onChange((current) => ({
+      ...current,
+      sections: current.sections.map((section) =>
+        section.id === id ? { ...section, minHeight } : section,
+      ),
+    }));
   const buttonSize = (id: string, buttonWidth?: number, paddingY?: number) =>
     onChange((current) =>
       updateEmailBlock(current, id, (block) =>
@@ -493,10 +511,13 @@ export default function EmailCanvasControls({
     const current = resizingRef.current;
     if (!current) return;
     if (cancel) {
-      if (current.type === 'image') imageWidth(current.id, current.original);
+      if (current.type === 'image' || current.type === 'text')
+        blockWidth(current.id, current.original);
+      else if (current.type === 'section')
+        sectionHeight(current.id, current.original);
       else if (current.type === 'button')
         buttonSize(current.id, current.originalWidth, current.originalPaddingY);
-      else
+      else if (current.type === 'columns')
         columnWeights(
           current.leftId,
           current.rightId,
@@ -517,7 +538,26 @@ export default function EmailCanvasControls({
         const current = resizingRef.current;
         if (!current || event.pointerId !== current.pointerId) return;
         const delta = event.clientX - current.startX;
-        if (current.type === 'button') {
+        if (current.type === 'section') {
+          sectionHeight(
+            current.id,
+            Math.max(
+              0,
+              Math.round(current.height + event.clientY - current.startY),
+            ),
+          );
+        } else if (current.type === 'text') {
+          blockWidth(
+            current.id,
+            Math.max(
+              1,
+              Math.min(
+                100,
+                ((current.width + delta) / current.columnWidth) * 100,
+              ),
+            ),
+          );
+        } else if (current.type === 'button') {
           buttonSize(
             current.id,
             Math.min(
@@ -537,7 +577,7 @@ export default function EmailCanvasControls({
             Math.max(1, current.height);
           const imageDelta =
             Math.abs(verticalDelta) > Math.abs(delta) ? verticalDelta : delta;
-          imageWidth(
+          blockWidth(
             current.id,
             Math.round(
               Math.max(
@@ -549,7 +589,7 @@ export default function EmailCanvasControls({
               ) * 10,
             ) / 10,
           );
-        } else {
+        } else if (current.type === 'columns') {
           const total = current.leftWeight + current.rightWeight;
           const minimum = total * Math.min(32 / current.width, 0.25);
           const left = Math.max(
@@ -636,11 +676,32 @@ export default function EmailCanvasControls({
               focusable="false"
             />
           </button>
+          <button
+            type="button"
+            className={e.sectionResize}
+            style={{ top: box.height + 4, left: box.width / 2 - 18 }}
+            aria-label={`Изменить высоту секции ${index + 1}`}
+            title="Потяните нижний край, чтобы изменить высоту фона"
+            onPointerDown={(event) =>
+              capture(event, {
+                type: 'section',
+                pointerId: event.pointerId,
+                id: box.id,
+                startX: event.clientX,
+                startY: event.clientY,
+                width: box.width,
+                height: box.height,
+                original: document.sections.find(
+                  (section) => section.id === box.id,
+                )?.minHeight,
+              })
+            }
+          />
         </div>
       ))}
       {!resizing &&
         boxes.blocks
-          .filter((box) => box.image || box.button)
+          .filter((box) => box.image || box.button || box.text)
           .flatMap((box) => {
             const column = document.sections
               .flatMap((section) => section.columns)
@@ -687,7 +748,7 @@ export default function EmailCanvasControls({
                   data-column-id={column.id}
                   data-side={side}
                   data-anchor-width={anchorWidthPercent}
-                  aria-label={`Добавить ${side === 'left' ? 'слева' : 'справа'} от ${box.button ? 'кнопки' : 'картинки'}`}
+                  aria-label={`Добавить ${side === 'left' ? 'слева' : 'справа'} от ${box.button ? 'кнопки' : box.text ? 'текста' : 'картинки'}`}
                   title={`Добавить блок ${side === 'left' ? 'слева' : 'справа'}`}
                   onClick={(event) =>
                     onAddBeside(
@@ -812,15 +873,26 @@ export default function EmailCanvasControls({
               }}
             />
           )}
-          {selectedBlock.type === 'image' && blockBox.image && (
+          {((selectedBlock.type === 'image' && blockBox.image) ||
+            (selectedBlock.type === 'text' && blockBox.text)) && (
             <button
               type="button"
-              className={e.imageResize}
+              className={
+                selectedBlock.type === 'text' ? e.textResize : e.imageResize
+              }
               style={{
-                top: blockBox.top + blockBox.height - 6,
+                top:
+                  blockBox.top +
+                  (selectedBlock.type === 'text'
+                    ? blockBox.height / 2 - 12
+                    : blockBox.height - 6),
                 left: blockBox.left + blockBox.width - 6,
               }}
-              aria-label="Изменить размер картинки"
+              aria-label={
+                selectedBlock.type === 'text'
+                  ? 'Изменить ширину текста'
+                  : 'Изменить размер картинки'
+              }
               title="Потяните, чтобы изменить размер"
               onPointerDown={(event) => {
                 const cell = Array.from(
@@ -832,7 +904,7 @@ export default function EmailCanvasControls({
                 const width = (row ?? cell).getBoundingClientRect().width;
                 if (!width) return;
                 capture(event, {
-                  type: 'image',
+                  type: selectedBlock.type,
                   pointerId: event.pointerId,
                   id: blockId!,
                   startX: event.clientX,
@@ -849,7 +921,7 @@ export default function EmailCanvasControls({
                 if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')
                   return;
                 event.preventDefault();
-                imageWidth(
+                blockWidth(
                   blockId!,
                   Math.max(
                     1,

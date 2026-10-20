@@ -208,6 +208,9 @@ describe('email document renderer', () => {
     document.appearance.pageBackgroundImage = 'data:image/png;base64,YQ==';
     document.appearance.backgroundImage = 'data:image/jpeg;base64,Yg==';
     document.sections[0].backgroundImage = 'https://example.test/banner.png';
+    document.sections[0].textColor = '#ffffff';
+    document.sections[0].minHeight = 320;
+    document.sections[0].columns[0].blocks[0].widthPercent = 60;
     const preview = renderEmailDocument(document, 'uk');
     expect(preview.html).toContain('data:image/png;base64,YQ==');
     expect(preview.html).toContain('data:image/jpeg;base64,Yg==');
@@ -215,6 +218,13 @@ describe('email document renderer', () => {
       'background-image:url(&#39;https://example.test/banner.png&#39;)',
     );
     expect(preview.html).toContain('Заголовок');
+    expect(preview.html).toContain('margin:0;color:#ffffff;');
+    expect(preview.html).toContain('height:320px;');
+    expect(preview.html).toContain('width:60%;');
+    expect(renderEmailDocumentContent(document, 'uk').html).not.toContain(
+      'overflow:hidden',
+    );
+    expect(preview.html).not.toContain('contenteditable');
     expect(preview.notes).toEqual([]);
   });
 

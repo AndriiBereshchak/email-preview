@@ -20,11 +20,14 @@ import type {
   EmailBlock,
   EmailBlockContent,
   EmailDocument,
+  EmailSection,
 } from '../../utils/emailDocument';
 import type { LetterLocale } from '../../utils/localModel';
 import { readAppearanceImage } from '../../utils/appearanceImage';
 import { backgroundImageStyle } from '../../utils/appearanceModel';
 import EmailCanvasControls from './EmailCanvasControls';
+import AppearanceColor from './AppearanceColor';
+import AppearanceBackgroundImage from './AppearanceBackgroundImage';
 import { Trash2, Upload } from 'lucide-react';
 import { Field } from '../Field';
 import e from './emailBuilder.module.css';
@@ -214,6 +217,16 @@ export default function EmailBuilder({
     ? (document.versions[locale]?.blocks[selectedBlock.id] ??
       emptyEmailBlockContent(selectedBlock.type))
     : undefined;
+  const updateSection = (changes: Partial<EmailSection>) => {
+    if (!target) return;
+    const id = target.section.id;
+    onChange((current) => ({
+      ...current,
+      sections: current.sections.map((section) =>
+        section.id === id ? { ...section, ...changes } : section,
+      ),
+    }));
+  };
   const closePanels = useCallback(() => {
     setInsertion(null);
     setColumnsOpen(false);
@@ -743,7 +756,7 @@ export default function EmailBuilder({
               role="dialog"
               aria-label={
                 columnsOpen
-                  ? 'Колонки секции'
+                  ? 'Настройки секции'
                   : `Настройки блока ${labels[selectedBlock!.type].toLowerCase()}`
               }
               style={{
@@ -753,7 +766,7 @@ export default function EmailBuilder({
             >
               <div className={e.popoverHead}>
                 <strong>
-                  {columnsOpen ? 'Колонки' : labels[selectedBlock!.type]}
+                  {columnsOpen ? 'Секция' : labels[selectedBlock!.type]}
                 </strong>
                 <button
                   type="button"
@@ -765,6 +778,34 @@ export default function EmailBuilder({
               </div>
               {columnsOpen ? (
                 <div className={e.columnSettings}>
+                  <AppearanceColor
+                    label="Фон секции"
+                    value={
+                      target.section.background ??
+                      document.appearance.background
+                    }
+                    onChange={(background) => updateSection({ background })}
+                  />
+                  <AppearanceBackgroundImage
+                    key={target.section.id}
+                    label="Фон секции"
+                    value={target.section.backgroundImage ?? ''}
+                    onChange={(backgroundImage) =>
+                      updateSection({ backgroundImage })
+                    }
+                  />
+                  <AppearanceColor
+                    label="Цвет текста секции"
+                    value={
+                      target.section.textColor ?? document.appearance.textColor
+                    }
+                    onChange={(textColor) => updateSection({ textColor })}
+                  />
+                  <p className={e.hint}>
+                    Добавьте текст в эту секцию — он будет поверх фона.
+                    Оформление общее для всех языков.
+                  </p>
+                  <strong>Колонки</strong>
                   {target.section.columns.map((column, index) => (
                     <div className={e.columnRow} key={column.id}>
                       <button

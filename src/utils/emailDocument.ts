@@ -39,6 +39,8 @@ export interface EmailSection {
   id: string;
   background?: string;
   backgroundImage?: string;
+  textColor?: string;
+  minHeight?: number;
   borderColor?: string;
   borderRadius?: number;
   verticalAlignment?: 'top' | 'middle' | 'bottom';

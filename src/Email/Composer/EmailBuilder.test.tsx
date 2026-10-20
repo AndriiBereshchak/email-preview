@@ -126,9 +126,11 @@ beforeEach(() => {
           y,
           this.tagName === 'IMG'
             ? (blockWidth * parseFloat(this.style.width)) / 100
-            : this.hasAttribute('data-email-button')
-              ? 96
-              : blockWidth,
+            : this.hasAttribute('data-email-text')
+              ? (blockWidth * (parseFloat(this.style.width) || 100)) / 100
+              : this.hasAttribute('data-email-button')
+                ? 96
+                : blockWidth,
           this.tagName === 'IMG'
             ? (blockWidth * parseFloat(this.style.width)) / 200
             : 60,
@@ -488,7 +490,7 @@ it('deletes the intended section from its own controls and removes its content i
 it('opens the columns of the clicked section and deletes only the intended column', () => {
   const page = setup();
   fireEvent.click(page.getByRole('button', { name: 'Настройки секции 2' }));
-  expect(page.getByRole('dialog', { name: 'Колонки секции' })).toBeTruthy();
+  expect(page.getByRole('dialog', { name: 'Настройки секции' })).toBeTruthy();
   expect(page.queryByRole('button', { name: 'Удалить колонку 1' })).toBeNull();
   fireEvent.click(page.getByRole('button', { name: 'Настройки секции 1' }));
   fireEvent.click(page.getByRole('button', { name: 'Удалить колонку 2' }));
@@ -743,3 +745,95 @@ it.each(['image', 'button'] as const)(
     );
   },
 );
+
+it('sets a section background with editable text above it and removes only the image', async () => {
+  const image = await import('../../utils/appearanceImage');
+  const src = 'data:image/png;base64,aGVsbG8=';
+  vi.spyOn(image, 'readAppearanceImage').mockResolvedValue(src);
+  const page = setup();
+  const versions = page.document().versions;
+  fireEvent.click(page.getByRole('button', { name: 'Настройки секции 1' }));
+  fireEvent.change(page.getByRole('textbox', { name: 'Фон секции' }), {
+    target: { value: '#123456' },
+  });
+  fireEvent.change(page.getByLabelText('Фон секции: изображение'), {
+    target: {
+      files: [
+        new File(['background'], 'background.png', { type: 'image/png' }),
+      ],
+    },
+  });
+  await page.findByAltText('Фон секции');
+  fireEvent.change(page.getByRole('textbox', { name: 'Цвет текста секции' }), {
+    target: { value: '#ffffff' },
+  });
+  expect(page.document().sections[0]).toMatchObject({
+    background: '#123456',
+    backgroundImage: src,
+    textColor: '#ffffff',
+  });
+  expect(page.document().sections[1].backgroundImage).toBeUndefined();
+  expect(page.document().versions).toBe(versions);
+  const paragraph = page.container.querySelector<HTMLElement>(
+    '[data-block-id="a"] [data-email-text]',
+  )!;
+  expect(paragraph.style.color).toBe('rgb(255, 255, 255)');
+  fireEvent.click(page.getByRole('button', { name: 'Убрать изображение' }));
+  expect(page.document().sections[0].backgroundImage).toBe('');
+  expect(page.document().versions).toBe(versions);
+  fireEvent.click(page.getByRole('button', { name: 'Закрыть настройки' }));
+  const editor = page.container.querySelector<HTMLElement>(
+    '[data-block-id="a"] [data-email-text]',
+  )!;
+  fireEvent.click(editor);
+  fireEvent.input(editor, { target: { textContent: 'Текст на фоне' } });
+  expect(page.document().versions.ru!.blocks.a).toEqual({
+    type: 'text',
+    text: 'Текст на фоне',
+  });
+  expect(page.document().versions.uk!.blocks.a).toEqual({
+    type: 'text',
+    text: 'Перший',
+  });
+});
+
+it('changes only the selected section minimum height and restores it on cancellation', () => {
+  const page = setup();
+  const versions = page.document().versions;
+  const handle = page.getByRole('button', { name: 'Изменить высоту секции 1' });
+  fireEvent.pointerDown(handle, { pointerId: 1, button: 0, clientY: 200 });
+  fireEvent.pointerMove(handle, { pointerId: 1, clientY: 280 });
+  fireEvent.pointerUp(handle, { pointerId: 1 });
+  expect(page.document().sections[0].minHeight).toBe(280);
+  expect(page.document().sections[1].minHeight).toBeUndefined();
+  expect(page.document().versions).toBe(versions);
+  fireEvent.pointerDown(handle, { pointerId: 2, button: 0, clientY: 200 });
+  fireEvent.pointerMove(handle, { pointerId: 2, clientY: 320 });
+  fireEvent.pointerCancel(handle, { pointerId: 2 });
+  expect(page.document().sections[0].minHeight).toBe(280);
+});
+
+it('narrows text without changing its contents and allows adding a block in the freed space', () => {
+  const page = setup();
+  fireEvent.click(
+    page.getAllByRole('button', { name: 'Редактировать текст' })[0],
+  );
+  const versions = page.document().versions;
+  const handle = page.getByRole('button', { name: 'Изменить ширину текста' });
+  fireEvent.pointerDown(handle, { pointerId: 1, button: 0, clientX: 400 });
+  fireEvent.pointerMove(handle, { pointerId: 1, clientX: 268 });
+  fireEvent.pointerUp(handle, { pointerId: 1 });
+  expect(page.document().sections[0].columns[0].blocks[0].widthPercent).toBe(
+    50,
+  );
+  expect(page.document().versions).toBe(versions);
+  fireEvent.click(
+    page.getByRole('button', { name: 'Добавить справа от текста' }),
+  );
+  fireEvent.click(page.getByRole('button', { name: 'Кнопка' }));
+  const blocks = page.document().sections[0].columns[0].blocks;
+  expect(blocks[0].rowId).toBeTruthy();
+  expect(blocks[1].rowId).toBe(blocks[0].rowId);
+  expect(blocks[1].type).toBe('button');
+  expect(page.document().versions).toBe(versions);
+});

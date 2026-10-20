@@ -4,7 +4,7 @@ import {
   emailBlockRows,
   moveEmailBlock,
   placeEmailBlockBeside,
-  resizeEmailImage,
+  resizeEmailBlockWidth,
 } from './emailDocumentLayout';
 import { renderEmailDocument } from './renderEmailDocument';
 
@@ -115,10 +115,10 @@ it('resizes the image within a shared row while the neighbors fill the remaining
     'left',
     'row',
   );
-  document = resizeEmailImage(document, 'image', 35);
+  document = resizeEmailBlockWidth(document, 'image', 35);
   const row = emailBlockRows(document.sections[0].columns[0].blocks)[1];
   expect(row.map((block) => block.widthPercent)).toEqual([65, 35]);
-  document = resizeEmailImage(document, 'image', 1000);
+  document = resizeEmailBlockWidth(document, 'image', 1000);
   expect(
     emailBlockRows(document.sections[0].columns[0].blocks)[1].every(
       (block) => block.widthPercent! > 0,

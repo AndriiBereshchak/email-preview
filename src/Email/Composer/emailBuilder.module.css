@@ -191,6 +191,9 @@
   border-color: #68bb8a;
 }
 .columnSettings {
+  max-height: min(65vh, 600px);
+  overflow-y: auto;
+  padding-right: 4px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -239,6 +242,8 @@
 .sectionDrag,
 .blockDrag,
 .imageResize,
+.textResize,
+.sectionResize,
 .columnResize {
   position: absolute;
   pointer-events: auto;
@@ -269,7 +274,8 @@
 .blockDrag:active {
   cursor: grabbing;
 }
-.imageResize {
+.imageResize,
+.textResize {
   width: 12px;
   height: 12px;
   border: 2px solid white;
@@ -538,4 +544,22 @@
   color: var(--danger);
   pointer-events: auto;
   cursor: pointer;
+}
+
+.textResize {
+  height: 24px;
+  cursor: ew-resize;
+}
+.sectionResize {
+  width: 36px;
+  height: 8px;
+  padding: 0;
+  border: 1px solid white;
+  border-radius: 4px;
+  background: #68bb8a;
+  cursor: ns-resize;
+}
+.sectionResize:hover,
+.sectionResize:focus-visible {
+  background: #3e9a67;
 }

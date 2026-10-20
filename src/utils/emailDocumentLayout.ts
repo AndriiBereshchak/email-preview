@@ -196,7 +196,7 @@ export function placeEmailBlockBeside(
   };
 }
 
-export function resizeEmailImage(
+export function resizeEmailBlockWidth(
   document: EmailDocument,
   id: string,
   widthPercent?: number,
@@ -207,7 +207,10 @@ export function resizeEmailImage(
       ...section,
       columns: section.columns.map((column) => {
         const row = emailBlockRows(column.blocks).find((items) =>
-          items.some((item) => item.id === id && item.type === 'image'),
+          items.some(
+            (item) =>
+              item.id === id && (item.type === 'image' || item.type === 'text'),
+          ),
         );
         if (!row) return column;
         const minimum = Math.min(1, 50 / row.length);

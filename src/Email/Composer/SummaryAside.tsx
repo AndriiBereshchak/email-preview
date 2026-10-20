@@ -1,7 +1,7 @@
 import {
   cx as clsx,
   type LetterLocale,
-  type LetterDraft,
+  type LetterSummary,
 } from '../../utils/localModel';
 import {
   formatCount,
@@ -19,7 +19,7 @@ interface Props {
   problem: string | null;
   filterLines: string[];
   byLanguage: Array<{ locale: string; count: number }>;
-  drafts: LetterDraft[];
+  drafts: LetterSummary[];
   defaultLocale: LetterLocale;
   problems: Record<string, string | null>;
   isPreviewed: (locale: string) => boolean;

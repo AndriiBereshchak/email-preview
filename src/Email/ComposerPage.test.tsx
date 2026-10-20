@@ -363,9 +363,11 @@ it('opens the constructor without body text and keeps shared layout with indepen
   fireEvent.click(page.getByRole('tab', { name: /Русский/ }));
   expect((inlineText(page) as HTMLElement).textContent).toBe('Содержание RU');
   fireEvent.click(page.getByRole('tab', { name: 'На телефоне' }));
-  expect(
-    page.getByTitle('Письмо на телефоне').getAttribute('srcdoc'),
-  ).toContain('Содержание RU');
+  await waitFor(() =>
+    expect(
+      page.getByTitle('Письмо на телефоне').getAttribute('srcdoc'),
+    ).toContain('Содержание RU'),
+  );
   fireEvent.click(page.getByRole('button', { name: 'Далее: проверка' }));
   await page.findByText('Просмотрено версий: 1 из 2');
   const html = page.getByTitle('Предпросмотр письма').getAttribute('srcdoc')!;
@@ -417,6 +419,15 @@ it('renders uploaded images and button links through the connected document mode
   fireEvent.change(page.getByRole('textbox', { name: 'Описание картинки' }), {
     target: { value: 'Наше предложение' },
   });
+  const embed = vi.spyOn(image, 'embedEmailImages');
+  fireEvent.click(page.getByRole('tab', { name: 'На телефоне' }));
+  await waitFor(() =>
+    expect(
+      page.getByTitle('Письмо на телефоне').getAttribute('srcdoc'),
+    ).toContain(src),
+  );
+  expect(embed).toHaveBeenCalled();
+  fireEvent.click(page.getByRole('tab', { name: 'Редактор' }));
   fireEvent.click(page.getByRole('button', { name: 'Далее: проверка' }));
   await page.findByText('Просмотрено версий: 1 из 1');
   const html = page.getByTitle('Предпросмотр письма').getAttribute('srcdoc')!;
@@ -461,4 +472,17 @@ it('keeps a pending image upload attached to its original language', async () =>
       .querySelector('img')
       ?.getAttribute('src'),
   ).toBe('data:image/png;base64,aGVsbG8=');
+});
+
+it('renders only the active editor while typing and does not parse generated HTML for readiness', () => {
+  const page = setup();
+  addUkrainian(page);
+  fireEvent.click(page.getByRole('button', { name: 'Далее: оформление' }));
+  const renderer = vi.spyOn(documentRenderer, 'renderEmailDocumentContent');
+  const parser = vi.spyOn(DOMParser.prototype, 'parseFromString');
+  fireEvent.input(inlineText(page), { target: { textContent: 'Нова фраза' } });
+  expect(renderer).toHaveBeenCalledTimes(1);
+  expect(renderer.mock.calls[0][1]).toBe('uk');
+  expect(renderer.mock.calls[0][2]).toEqual({ editor: true });
+  expect(parser).not.toHaveBeenCalled();
 });

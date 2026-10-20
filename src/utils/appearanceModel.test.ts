@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_APPEARANCE, normalizeAppearance } from './appearanceModel';
 import { appearanceBodyCss } from './appearanceModel';
-import { previewKey } from './localModel';
 import { renderLocalPreview } from './localModel';
 const letter = {
   locale: 'ru' as const,
@@ -64,9 +63,6 @@ it('renders independent backgrounds and removes them on reset without changing l
   expect(body.innerHTML).toBe(letter.html);
   expect(doc.querySelector('style')!.textContent).toContain(
     "background-image:url('data:image/jpeg;base64,d29ybGQ=')",
-  );
-  expect(previewKey('TRADER', letter, appearance)).not.toBe(
-    previewKey('TRADER', letter),
   );
   expect(appearanceBodyCss(DEFAULT_APPEARANCE)).toContain(
     'background-image:none',

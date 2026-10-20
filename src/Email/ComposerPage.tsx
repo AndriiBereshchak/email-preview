@@ -1,7 +1,8 @@
 import DesignStep from './Composer/DesignStep';
 import { useMemo, useState } from 'react';
-import { createEmailDocument } from '../utils/emailDocument';
-import { renderEmailDocumentContent } from '../utils/renderEmailDocument';
+import { emailVersionProblem } from '../utils/emailDocument';
+import { useEmailDocument } from '../hooks/useEmailDocument';
+import { useEmailImageResources } from '../hooks/useEmailImageResources';
 import type { EmailAppearance } from '../utils/appearanceModel';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
@@ -20,9 +21,7 @@ import {
 } from '../utils/audienceModel';
 import {
   cx as clsx,
-  draftProblem,
-  previewKey,
-  type LetterDraft,
+  type LetterSummary,
   type LetterLocale,
 } from '../utils/localModel';
 import { DEMO_AUDIENCE } from '../mocks/audience';
@@ -47,16 +46,16 @@ const ComposerPage = () => {
   const [partnerFilters, setPartnerFilters] = useState<PartnerFilterState>(
     EMPTY_PARTNER_FILTERS,
   );
-  const [document, setDocument] = useState(() => createEmailDocument());
-  const drafts = useMemo<LetterDraft[]>(
+  const { document, setDocument, revisions } = useEmailDocument();
+  useEmailImageResources(document);
+  const drafts = useMemo<LetterSummary[]>(
     () =>
       Object.entries(document.versions).map(([locale, version]) => ({
         locale: locale as LetterLocale,
         subject: version!.subject,
         preheader: version!.preheader,
-        html: renderEmailDocumentContent(document, locale as LetterLocale).html,
       })),
-    [document],
+    [document.versions],
   );
   const [defaultLocale, setDefaultLocale] = useState<LetterLocale>('ru');
   const [activeLocale, setActiveLocale] = useState<LetterLocale>('ru');
@@ -85,7 +84,10 @@ const ComposerPage = () => {
   const locales = drafts.map((draft) => draft.locale);
   const reach = versionReach(byLanguage, locales, defaultLocale);
   const problems: Record<string, string | null> = Object.fromEntries(
-    drafts.map((draft) => [draft.locale, draftProblem(draft)]),
+    drafts.map((draft) => [
+      draft.locale,
+      emailVersionProblem(document, draft.locale),
+    ]),
   );
   const subjectProblems = Object.fromEntries(
     drafts.map((draft) => [
@@ -93,15 +95,13 @@ const ComposerPage = () => {
       draft.subject.trim() ? null : 'заполните тему',
     ]),
   );
-  const subjectsReady = drafts.every(
-    (draft) => !subjectProblems[draft.locale],
-  );
+  const subjectsReady = drafts.every((draft) => !subjectProblems[draft.locale]);
   const lettersReady = drafts.every((draft) => !problems[draft.locale]);
   const isPreviewed = (locale: string): boolean => {
     const letter = letters.find((item) => item.locale === locale);
     return (
       Boolean(letter) &&
-      previews[locale]?.key === previewKey(target, letter!, appearance)
+      previews[locale]?.key === `${target}:${revisions[locale]}`
     );
   };
   const allPreviewed = letters.every((letter) => isPreviewed(letter.locale));
@@ -116,7 +116,7 @@ const ComposerPage = () => {
 
   const updateDraft = (
     locale: LetterLocale,
-    patch: Partial<Pick<LetterDraft, 'subject' | 'preheader'>>,
+    patch: Partial<Pick<LetterSummary, 'subject' | 'preheader'>>,
   ) =>
     setDocument((current) => ({
       ...current,
@@ -282,7 +282,12 @@ const ComposerPage = () => {
               target={target}
               count={count}
               letters={letters}
-              appearance={appearance}
+              previewKeys={Object.fromEntries(
+                locales.map((locale) => [
+                  locale,
+                  `${target}:${revisions[locale]}`,
+                ]),
+              )}
               defaultLocale={defaultLocale}
               activeLocale={activeLocale}
               onActive={setActiveLocale}

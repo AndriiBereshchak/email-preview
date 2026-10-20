@@ -1,4 +1,5 @@
-import { useState, type Dispatch, type SetStateAction } from 'react';
+import { useEffect, useState, type Dispatch, type SetStateAction } from 'react';
+import { embedEmailImages } from '../../utils/appearanceImage';
 import { cx, languageName, type LetterLocale } from '../../utils/localModel';
 import {
   backgroundImageStyle,
@@ -98,18 +99,7 @@ export default function DesignStep(props: Props) {
                   onChange={props.onChange}
                 />
               ) : (
-                <iframe
-                  title="Письмо на телефоне"
-                  sandbox=""
-                  srcDoc={renderEmailDocument(props.document, active).html}
-                  style={{
-                    width: 375,
-                    maxWidth: '100%',
-                    height: 640,
-                    border: 0,
-                    background: 'white',
-                  }}
-                />
+                <MobilePreview document={props.document} locale={active} />
               )}
             </div>
           </div>
@@ -132,5 +122,43 @@ export default function DesignStep(props: Props) {
         </button>
       </div>
     </section>
+  );
+}
+
+function MobilePreview({
+  document,
+  locale,
+}: {
+  document: EmailDocument;
+  locale: LetterLocale;
+}) {
+  const [html, setHtml] = useState('');
+  useEffect(() => {
+    let cancelled = false;
+    embedEmailImages(renderEmailDocument(document, locale).html).then(
+      (value) => {
+        if (!cancelled) setHtml(value);
+      },
+      () => {
+        if (!cancelled) setHtml('');
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [document, locale]);
+  return (
+    <iframe
+      title="Письмо на телефоне"
+      sandbox=""
+      srcDoc={html}
+      style={{
+        width: 375,
+        maxWidth: '100%',
+        height: 640,
+        border: 0,
+        background: 'white',
+      }}
+    />
   );
 }

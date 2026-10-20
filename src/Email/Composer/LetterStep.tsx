@@ -7,7 +7,7 @@ import {
   languageName,
   uncoveredLanguages,
   type LetterLocale,
-  type LetterDraft,
+  type LetterSummary,
   type VersionReach,
 } from '../../utils/localModel';
 import { CustomInput } from '../../parts/CustomInput/CustomInput';
@@ -15,7 +15,7 @@ import { Field } from '../Field';
 import e from '../emailCampaign.module.css';
 
 interface Props {
-  drafts: LetterDraft[];
+  drafts: LetterSummary[];
   activeLocale: LetterLocale;
   defaultLocale: LetterLocale;
   byLanguage: Array<{ locale: string; count: number }>;
@@ -24,7 +24,7 @@ interface Props {
   onActive: (locale: LetterLocale) => void;
   onChange: (
     locale: LetterLocale,
-    patch: Partial<Pick<LetterDraft, 'subject' | 'preheader'>>,
+    patch: Partial<Pick<LetterSummary, 'subject' | 'preheader'>>,
   ) => void;
   onAdd: (locale: LetterLocale) => void;
   onRemove: (locale: LetterLocale) => void;

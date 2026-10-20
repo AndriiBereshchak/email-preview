@@ -6,10 +6,12 @@ import {
 } from './appearanceModel';
 import editorContentsCss from 'suneditor/src/assets/css/suneditor-contents.css?raw';
 export type LetterLocale = 'ru' | 'uk' | 'en';
-export interface LetterDraft {
+export interface LetterSummary {
   locale: LetterLocale;
   subject: string;
   preheader: string;
+}
+export interface LetterDraft extends LetterSummary {
   html: string;
 }
 export interface EmailImage {
@@ -50,21 +52,6 @@ export const uncoveredLanguages = (
   rows: Array<{ locale: string; count: number }>,
   locales: string[],
 ) => rows.filter((row) => !locales.includes(row.locale));
-export const emptyDraft = (locale: LetterLocale): LetterDraft => ({
-  locale,
-  subject: '',
-  preheader: '',
-  html: '',
-});
-
-export const draftProblem = (draft: LetterDraft): string | null => {
-  if (!draft.subject.trim()) return 'заполните тему';
-  const parsed = new DOMParser().parseFromString(draft.html, 'text/html');
-  return parsed.body.textContent?.trim() || parsed.querySelector('img')
-    ? null
-    : 'заполните письмо';
-};
-
 export function renderLocalPreview(
   draft: LetterDraft,
   appearance: EmailAppearance = DEFAULT_APPEARANCE,
@@ -83,17 +70,3 @@ export function renderLocalPreview(
     html: renderEmailHtml(draft, a, editorContentsCss),
   };
 }
-
-export const previewKey = (
-  target: string,
-  letter: LetterDraft,
-  appearance: EmailAppearance = DEFAULT_APPEARANCE,
-) =>
-  JSON.stringify([
-    target,
-    letter.locale,
-    letter.subject,
-    letter.preheader,
-    letter.html,
-    normalizeAppearance(appearance),
-  ]);

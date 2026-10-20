@@ -1,6 +1,6 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useId, useRef } from 'react';
 import { ImagePlus } from 'lucide-react';
-import { readAppearanceImage } from '../../utils/appearanceImage';
+import { useImageUpload } from '../../hooks/useImageUpload';
 import e from '../emailCampaign.module.css';
 
 export default function AppearanceBackgroundImage({
@@ -15,38 +15,8 @@ export default function AppearanceBackgroundImage({
   onChange: (value: string) => void;
 }) {
   const id = useId();
-  const request = useRef(0);
-  const latest = useRef(onChange);
-  latest.current = onChange;
   const input = useRef<HTMLInputElement>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  useEffect(
-    () => () => {
-      request.current++;
-    },
-    [],
-  );
-  const upload = async (file: File | undefined) => {
-    if (!file) return;
-    const current = ++request.current;
-    setLoading(true);
-    setError('');
-    try {
-      const src = await readAppearanceImage(file);
-      if (current === request.current) latest.current(src);
-    } catch (failure) {
-      if (current === request.current)
-        setError(
-          failure instanceof Error
-            ? failure.message
-            : 'Не удалось загрузить изображение',
-        );
-    } finally {
-      if (current === request.current) setLoading(false);
-      if (input.current) input.current.value = '';
-    }
-  };
+  const { loading, error, upload, cancel } = useImageUpload(onChange);
   return (
     <div className={e.field}>
       {!compact && (
@@ -66,6 +36,7 @@ export default function AppearanceBackgroundImage({
         accept=".png,.jpg,.jpeg,.gif,.webp"
         onChange={(event) => {
           upload(event.target.files?.[0]);
+          event.target.value = '';
         }}
       />
       <button
@@ -90,11 +61,9 @@ export default function AppearanceBackgroundImage({
           type="button"
           className={e.linkBtn}
           onClick={() => {
-            request.current++;
-            setLoading(false);
-            setError('');
+            cancel();
             if (input.current) input.current.value = '';
-            latest.current('');
+            onChange('');
           }}
         >
           Убрать изображение

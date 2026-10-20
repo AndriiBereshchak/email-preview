@@ -1,13 +1,12 @@
 import type { EmailDocument } from '../../utils/emailDocument';
 import { renderEmailDocument } from '../../utils/renderEmailDocument';
-import type { EmailAppearance } from '../../utils/appearanceModel';
+import { embedEmailImages } from '../../utils/appearanceImage';
 import { useEffect, useRef, useState } from 'react';
 import {
   cx as clsx,
   formatCount,
   languageName,
-  previewKey,
-  type LetterDraft as CampaignLetter,
+  type LetterSummary,
   type LetterLocale,
   type LetterPreviewResult,
 } from '../../utils/localModel';
@@ -24,9 +23,9 @@ export interface PreviewState {
 interface Props {
   document: EmailDocument;
   target: CampaignTarget;
-  appearance: EmailAppearance;
+  previewKeys: Record<string, string>;
   count: number | null;
-  letters: CampaignLetter[];
+  letters: LetterSummary[];
   defaultLocale: LetterLocale;
   activeLocale: LetterLocale;
   onActive: (locale: LetterLocale) => void;
@@ -51,14 +50,13 @@ const ReviewStep = (props: Props) => {
   const letter =
     props.letters.find((item) => item.locale === props.activeLocale) ??
     props.letters[0]!;
-  const key = previewKey(props.target, letter, props.appearance);
+  const key = props.previewKeys[letter.locale];
   const preview = props.previews[letter.locale];
   const fresh = preview?.key === key;
   const failure = failedPreview?.key === key ? failedPreview.message : null;
   const previewed = props.letters.filter(
     (item) =>
-      props.previews[item.locale]?.key ===
-      previewKey(props.target, item, props.appearance),
+      props.previews[item.locale]?.key === props.previewKeys[item.locale],
   ).length;
 
   useEffect(() => {
@@ -67,6 +65,10 @@ const ReviewStep = (props: Props) => {
     setFailedPreview(null);
     Promise.resolve()
       .then(() => renderEmailDocument(props.document, letter.locale))
+      .then(async (data) => ({
+        ...data,
+        html: await embedEmailImages(data.html),
+      }))
       .then((data) => {
         if (!cancelled) onPreviewed.current(letter.locale, { key, data });
       })
@@ -102,7 +104,7 @@ const ReviewStep = (props: Props) => {
           {props.letters.map((item) => {
             const done =
               props.previews[item.locale]?.key ===
-              previewKey(props.target, item, props.appearance);
+              props.previewKeys[item.locale];
             return (
               <button
                 key={item.locale}

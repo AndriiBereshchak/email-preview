@@ -23,7 +23,7 @@ import type {
   EmailSection,
 } from '../../utils/emailDocument';
 import type { LetterLocale } from '../../utils/localModel';
-import { readAppearanceImage } from '../../utils/appearanceImage';
+import { useImageUpload } from '../../hooks/useImageUpload';
 import { backgroundImageStyle } from '../../utils/appearanceModel';
 import EmailCanvasControls from './EmailCanvasControls';
 import AppearanceColor from './AppearanceColor';
@@ -70,36 +70,13 @@ function BlockFields({
   content: EmailBlockContent;
   onChange: (value: EmailBlockContent) => void;
 }) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const request = useRef(0);
-  useEffect(
-    () => () => {
-      request.current++;
-    },
-    [],
-  );
-  const upload = async (file?: File) => {
-    if (!file || content.type !== 'image') return;
-
-    const id = ++request.current;
-    const update = onChange;
-    setBusy(true);
-    setError('');
-    try {
-      const src = await readAppearanceImage(file);
-      if (id === request.current) update({ ...content, src });
-    } catch (failure) {
-      if (id === request.current)
-        setError(
-          failure instanceof Error
-            ? failure.message
-            : 'Не удалось загрузить картинку',
-        );
-    } finally {
-      if (id === request.current) setBusy(false);
-    }
-  };
+  const {
+    loading: busy,
+    error,
+    upload,
+  } = useImageUpload((src) => {
+    if (content.type === 'image') onChange({ ...content, src });
+  }, true);
   if (content.type === 'text') return null;
   if (content.type === 'button')
     return (
@@ -223,7 +200,7 @@ export default function EmailBuilder({
   const renderedLocale = useRef(locale);
   const html = useMemo(
     () => renderEmailDocumentContent(document, locale, { editor: true }).html,
-    [document, locale],
+    [document.sections, document.appearance, document.versions[locale], locale],
   );
   const locations = document.sections.flatMap((section) =>
     section.columns.map((column) => ({ section, column })),

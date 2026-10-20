@@ -2,7 +2,7 @@ import {
   cx as clsx,
   formatCount,
   languageName,
-  type LetterDraft as CampaignLetter,
+  type LetterSummary,
   type LetterLocale,
   type VersionReach,
 } from '../../utils/localModel';
@@ -23,7 +23,7 @@ interface Props {
   count: number;
   everyone: boolean;
   reach: VersionReach[];
-  letters: CampaignLetter[];
+  letters: LetterSummary[];
   defaultLocale: LetterLocale;
   filterLines: string[];
   skipUnengaged: boolean;

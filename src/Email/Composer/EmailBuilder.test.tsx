@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import EmailBuilder from './EmailBuilder';
 import { createEmailDocument } from '../../utils/emailDocument';
 
@@ -1118,4 +1118,36 @@ it('toggles a selected bold phrase, preserves it while editing, and aligns only 
   expect(page.document().sections[0].columns[0].blocks[2]).not.toHaveProperty(
     'alignment',
   );
+});
+
+it('coalesces resize moves per frame and flushes the last move before pointer release', () => {
+  let frame!: FrameRequestCallback;
+  const request = vi.fn((callback: FrameRequestCallback) => {
+    frame = callback;
+    return 1;
+  });
+  const cancel = vi.fn();
+  vi.stubGlobal('requestAnimationFrame', request);
+  vi.stubGlobal('cancelAnimationFrame', cancel);
+  const page = setup();
+  fireEvent.click(
+    page.getAllByRole('button', { name: 'Редактировать текст' })[0],
+  );
+  const handle = page.getByRole('button', { name: 'Изменить ширину текста' });
+  const width = () =>
+    page.document().sections[0].columns[0].blocks[0].widthPercent;
+  fireEvent.pointerDown(handle, { pointerId: 1, button: 0, clientX: 400 });
+  for (const x of [350, 300, 268])
+    fireEvent.pointerMove(handle, { pointerId: 1, clientX: x });
+  expect(request).toHaveBeenCalledTimes(1);
+  expect(width()).toBeUndefined();
+  act(() => frame(0));
+  expect(width()).toBe(50);
+  fireEvent.pointerMove(handle, { pointerId: 1, clientX: 136 });
+  expect(request).toHaveBeenCalledTimes(2);
+  fireEvent.pointerUp(handle, { pointerId: 1 });
+  expect(width()).toBe(1);
+  expect(cancel).toHaveBeenCalled();
+  act(() => frame(16));
+  expect(width()).toBe(1);
 });

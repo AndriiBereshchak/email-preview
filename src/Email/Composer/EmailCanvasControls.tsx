@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   type Dispatch,
@@ -7,7 +8,11 @@ import {
   type SetStateAction,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
-import type { EmailDocument } from '../../utils/emailDocument';
+import type {
+  EmailBlock,
+  EmailColumn,
+  EmailDocument,
+} from '../../utils/emailDocument';
 import {
   moveEmailBlock,
   moveEmailSection,
@@ -138,6 +143,32 @@ export default function EmailCanvasControls({
   const [resizing, setResizing] = useState(false);
   const dragged = useRef<Dragged | null>(null);
   const resizingRef = useRef<Resize | null>(null);
+  const resizeFrame = useRef<number | null>(null);
+  const resizePoint = useRef<{ x: number; y: number } | null>(null);
+  useEffect(
+    () => () => {
+      if (resizeFrame.current !== null)
+        cancelAnimationFrame(resizeFrame.current);
+    },
+    [],
+  );
+  const blockLocations = useMemo(() => {
+    const result = new Map<
+      string,
+      { column: EmailColumn; row: EmailBlock[] }
+    >();
+    for (const section of document.sections)
+      for (const column of section.columns) {
+        for (const row of emailBlockRows(column.blocks))
+          for (const block of row) result.set(block.id, { column, row });
+      }
+    return result;
+  }, [document.sections]);
+  const columnBoxes = useMemo(
+    () => new Map(boxes.columns.map((box) => [box.id, box])),
+    [boxes.columns],
+  );
+
   const dropRef = useRef<Drop | null>(null);
   const activeSection = document.sections.find((section) =>
     section.columns.some((column) => column.id === columnId),
@@ -533,9 +564,75 @@ export default function EmailCanvasControls({
     onInteractionChange(true);
     event.currentTarget.setPointerCapture(event.pointerId);
   };
+  const applyResize = (x: number, y: number) => {
+    const current = resizingRef.current;
+    if (!current) return;
+    const delta = x - current.startX;
+    if (current.type === 'section') {
+      sectionHeight(
+        current.id,
+        Math.max(0, Math.round(current.height + y - current.startY)),
+      );
+    } else if (current.type === 'text') {
+      blockWidth(
+        current.id,
+        Math.max(
+          1,
+          Math.min(100, ((current.width + delta) / current.columnWidth) * 100),
+        ),
+      );
+    } else if (current.type === 'button') {
+      buttonSize(
+        current.id,
+        Math.min(
+          current.availableWidth,
+          Math.max(current.minimumWidth, current.width + delta),
+        ),
+        Math.max(0, Math.round(current.paddingY + (y - current.startY) / 2)),
+      );
+    } else if (current.type === 'image') {
+      const verticalDelta =
+        ((y - current.startY) * current.width) / Math.max(1, current.height);
+      const imageDelta =
+        Math.abs(verticalDelta) > Math.abs(delta) ? verticalDelta : delta;
+      blockWidth(
+        current.id,
+        Math.round(
+          Math.max(
+            1,
+            Math.min(
+              100,
+              ((current.width + imageDelta) / current.columnWidth) * 100,
+            ),
+          ) * 10,
+        ) / 10,
+      );
+    } else if (current.type === 'columns') {
+      const total = current.leftWeight + current.rightWeight;
+      const minimum = total * Math.min(32 / current.width, 0.25);
+      const left = Math.max(
+        minimum,
+        Math.min(
+          total - minimum,
+          current.leftWeight + (delta / current.width) * total,
+        ),
+      );
+      columnWeights(current.leftId, current.rightId, left, total - left);
+    }
+  };
+  const flushResize = () => {
+    if (resizeFrame.current !== null) cancelAnimationFrame(resizeFrame.current);
+    resizeFrame.current = null;
+    const point = resizePoint.current;
+    resizePoint.current = null;
+    if (point) applyResize(point.x, point.y);
+  };
+
   const stopResize = (cancel: boolean) => {
     const current = resizingRef.current;
     if (!current) return;
+    if (cancel) resizePoint.current = null;
+    flushResize();
     if (cancel) {
       if (current.type === 'image' || current.type === 'text')
         blockWidth(current.id, current.original);
@@ -563,70 +660,9 @@ export default function EmailCanvasControls({
       onPointerMove={(event) => {
         const current = resizingRef.current;
         if (!current || event.pointerId !== current.pointerId) return;
-        const delta = event.clientX - current.startX;
-        if (current.type === 'section') {
-          sectionHeight(
-            current.id,
-            Math.max(
-              0,
-              Math.round(current.height + event.clientY - current.startY),
-            ),
-          );
-        } else if (current.type === 'text') {
-          blockWidth(
-            current.id,
-            Math.max(
-              1,
-              Math.min(
-                100,
-                ((current.width + delta) / current.columnWidth) * 100,
-              ),
-            ),
-          );
-        } else if (current.type === 'button') {
-          buttonSize(
-            current.id,
-            Math.min(
-              current.availableWidth,
-              Math.max(current.minimumWidth, current.width + delta),
-            ),
-            Math.max(
-              0,
-              Math.round(
-                current.paddingY + (event.clientY - current.startY) / 2,
-              ),
-            ),
-          );
-        } else if (current.type === 'image') {
-          const verticalDelta =
-            ((event.clientY - current.startY) * current.width) /
-            Math.max(1, current.height);
-          const imageDelta =
-            Math.abs(verticalDelta) > Math.abs(delta) ? verticalDelta : delta;
-          blockWidth(
-            current.id,
-            Math.round(
-              Math.max(
-                1,
-                Math.min(
-                  100,
-                  ((current.width + imageDelta) / current.columnWidth) * 100,
-                ),
-              ) * 10,
-            ) / 10,
-          );
-        } else if (current.type === 'columns') {
-          const total = current.leftWeight + current.rightWeight;
-          const minimum = total * Math.min(32 / current.width, 0.25);
-          const left = Math.max(
-            minimum,
-            Math.min(
-              total - minimum,
-              current.leftWeight + (delta / current.width) * total,
-            ),
-          );
-          columnWeights(current.leftId, current.rightId, left, total - left);
-        }
+        resizePoint.current = { x: event.clientX, y: event.clientY };
+        if (resizeFrame.current === null)
+          resizeFrame.current = requestAnimationFrame(flushResize);
       }}
       onPointerUp={() => stopResize(false)}
       onPointerCancel={() => stopResize(true)}
@@ -739,18 +775,11 @@ export default function EmailCanvasControls({
         boxes.blocks
           .filter((box) => box.image || box.button || box.text)
           .flatMap((box) => {
-            const column = document.sections
-              .flatMap((section) => section.columns)
-              .find((column) =>
-                column.blocks.some((block) => block.id === box.id),
-              );
-            const columnBox = boxes.columns.find(
-              (item) => item.id === column?.id,
-            );
-            if (!column || !columnBox) return [];
-            const row = emailBlockRows(column.blocks).find((row) =>
-              row.some((block) => block.id === box.id),
-            )!;
+            const location = blockLocations.get(box.id);
+            if (!location) return [];
+            const { column, row } = location;
+            const columnBox = columnBoxes.get(column.id);
+            if (!columnBox) return [];
             const grouped = row.length > 1;
             const anchorWidthPercent =
               box.button && !grouped

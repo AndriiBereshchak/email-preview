@@ -1,8 +1,12 @@
 import { letterImageHtml } from './emailHtml';
-import { linkValue, saveLetterLink } from './letterLink';
+import { letterButtonCss } from './letterLink';
 import { renderLocalPreview } from './localModel';
 import { describe, expect, it } from 'vitest';
-import { createEmailDocument, type EmailDocument } from './emailDocument';
+import {
+  emailVersionProblem,
+  createEmailDocument,
+  type EmailDocument,
+} from './emailDocument';
 import {
   renderEmailDocument,
   renderEmailDocumentContent,
@@ -310,18 +314,14 @@ describe('email document renderer', () => {
   });
 });
 
-it('keeps button layout consistent between the existing editor and block renderer', () => {
+it('keeps the block renderer consistent with the shared button styles', () => {
   const letter = fixture();
-  const root = document.createElement('div');
-  const editorButton = saveLetterLink(
-    root,
-    {
-      ...linkValue(null, 'button', 'Start', letter.appearance.linkColor),
-      url: 'https://example.test',
-    },
-    null,
-    null,
-  );
+  const editorButton = document.createElement('a');
+  editorButton.style.cssText = letterButtonCss({
+    size: 'medium',
+    radius: 4,
+    background: letter.appearance.linkColor,
+  });
   const preview = renderEmailDocument(letter, 'en');
   const html = new DOMParser().parseFromString(preview.html, 'text/html');
   const blockButton = html.querySelector<HTMLAnchorElement>('.email-body a')!;
@@ -383,4 +383,29 @@ it('keeps editing placeholders and interactive markers out of the exported lette
   expect(exported.html).not.toContain('Редактировать');
   expect(exported.text).not.toContain('Нажмите');
   expect(exported.html).toContain('data-column-id="empty"');
+});
+
+it('checks version readiness directly from placed blocks without generating HTML', () => {
+  const letter = fixture();
+  expect(emailVersionProblem(letter, 'en')).toBeNull();
+  letter.versions.en!.subject = '  ';
+  expect(emailVersionProblem(letter, 'en')).toBe('заполните тему');
+  letter.versions.en!.subject = 'Subject';
+  letter.sections = [
+    { id: 's', columns: [{ id: 'c', blocks: [{ id: 'x', type: 'image' }] }] },
+  ];
+  letter.versions.en!.blocks.x = {
+    type: 'image',
+    src: 'javascript:alert(1)',
+    alt: 'Alt',
+  };
+  expect(emailVersionProblem(letter, 'en')).toBe('заполните письмо');
+  letter.versions.en!.blocks.x = {
+    type: 'image',
+    src: 'https://example.test/image.png',
+    alt: '',
+  };
+  expect(emailVersionProblem(letter, 'en')).toBeNull();
+  letter.sections[0].columns[0].blocks = [];
+  expect(emailVersionProblem(letter, 'en')).toBe('заполните письмо');
 });

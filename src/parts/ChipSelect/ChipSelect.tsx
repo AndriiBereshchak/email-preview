@@ -1,4 +1,5 @@
-import { useEffect, useRef, useId } from 'react';
+import { useId } from 'react';
+import { useDismissDetails } from '../../hooks/useDismissDetails';
 import { cx } from '../../utils/localModel';
 import type { Option } from '../../utils/audienceModel';
 
@@ -17,27 +18,10 @@ export function ChipSelect({
   placeholder?: string;
   emptyText?: string;
 }) {
-  const ref = useRef<HTMLDetailsElement>(null);
+  const ref = useDismissDetails();
   const id = useId();
-  useEffect(() => {
-    const close = (event: MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node))
-        ref.current.open = false;
-    };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
-  }, []);
   return (
-    <details
-      ref={ref}
-      className={cx('audience-chip', fieldClassName)}
-      onKeyDown={(event) => {
-        if (event.key === 'Escape' && ref.current) {
-          ref.current.open = false;
-          ref.current.querySelector('summary')?.focus();
-        }
-      }}
-    >
+    <details ref={ref} className={cx('audience-chip', fieldClassName)}>
       <summary id={id}>
         {value.length
           ? options

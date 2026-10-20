@@ -15,8 +15,7 @@
     "react-dom": "^19.2.0",
     "react-hot-toast": "^2.6.1",
     "react-router-dom": "^7.18.4",
-    "suneditor": "^2.47.8",
-    "suneditor-react": "^3.6.1"
+    "suneditor": "^2.47.8"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.3",

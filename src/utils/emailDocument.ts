@@ -1,5 +1,6 @@
 import { DEFAULT_APPEARANCE, type EmailAppearance } from './appearanceModel';
 import type { LetterLocale } from './localModel';
+import { emailImageUrl } from './appearanceImage';
 
 export type EmailAlignment = 'left' | 'center' | 'right';
 export type EmailBlock = (
@@ -87,4 +88,24 @@ export function emptyEmailBlockContent(
   if (type === 'text') return { type, text: '' };
   if (type === 'image') return { type, src: '', alt: '' };
   return { type, text: '', href: '' };
+}
+
+export function emailVersionProblem(
+  document: EmailDocument,
+  locale: LetterLocale,
+): string | null {
+  const version = document.versions[locale];
+  if (!version?.subject.trim()) return 'заполните тему';
+  const filled = document.sections.some((section) =>
+    section.columns.some((column) =>
+      column.blocks.some((block) => {
+        const content = version.blocks[block.id];
+        if (!content || content.type !== block.type) return false;
+        return content.type === 'image'
+          ? !!emailImageUrl(content.src)
+          : !!content.text.trim();
+      }),
+    ),
+  );
+  return filled ? null : 'заполните письмо';
 }

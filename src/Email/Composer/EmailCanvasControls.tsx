@@ -632,10 +632,14 @@ export default function EmailCanvasControls({
         <div
           key={box.id}
           className={e.sectionTools}
-          data-block-selected={Boolean(blockId) || undefined}
+          data-active={box.id === activeSection?.id || undefined}
           style={{ top: box.top - 8, left: box.left, width: box.width }}
         >
-          <div className={e.sectionToolbar}>
+          <div
+            className={e.sectionToolbar}
+            role="group"
+            aria-label={`Секция ${index + 1}`}
+          >
             <button
               type="button"
               className={e.sectionDrag}
@@ -669,7 +673,7 @@ export default function EmailCanvasControls({
             <button
               className={e.sectionSettings}
               type="button"
-              title="Настройки секции"
+              title={`Настройки всей секции ${index + 1}`}
               aria-label={`Настройки секции ${index + 1}`}
               onClick={() => onOpenSection(box.id)}
             >
@@ -764,6 +768,7 @@ export default function EmailCanvasControls({
                     height: Math.max(24, box.height),
                   }}
                   data-beside-anchor={box.id}
+                  data-active={box.id === blockId || undefined}
                   data-column-id={column.id}
                   data-side={side}
                   data-anchor-width={anchorWidthPercent}
@@ -790,7 +795,22 @@ export default function EmailCanvasControls({
         <>
           <div
             className={e.blockToolbar}
-            style={{ top: blockBox.top - 32, left: blockBox.left }}
+            role="group"
+            aria-label={
+              selectedBlock.type === 'text'
+                ? 'Текст'
+                : selectedBlock.type === 'image'
+                  ? 'Картинка'
+                  : 'Кнопка'
+            }
+            style={{
+              top: blockBox.top,
+              left: Math.max(
+                0,
+                (boxes.sections.find((box) => box.id === activeSection?.id)
+                  ?.left ?? blockBox.left) - 24,
+              ),
+            }}
           >
             <button
               type="button"
@@ -803,12 +823,10 @@ export default function EmailCanvasControls({
                 dragged.current = {
                   type: 'block',
                   id: blockBox.id,
-                  grabX: Math.max(
-                    0,
+                  grabX:
                     event.clientX -
-                      surface.current!.getBoundingClientRect().left -
-                      blockBox.left,
-                  ),
+                    surface.current!.getBoundingClientRect().left -
+                    blockBox.left,
                 };
                 event.dataTransfer.effectAllowed = 'move';
                 event.dataTransfer.setData('text/plain', blockBox.id);
@@ -867,8 +885,8 @@ export default function EmailCanvasControls({
               <button
                 type="button"
                 className={e.textLink}
-                aria-label="Ссылка в тексте"
-                title="Добавить или изменить ссылку"
+                aria-label="Ссылка для выделенного текста"
+                title="Ссылка для выделенного текста"
                 onPointerDown={(event) => event.preventDefault()}
                 onClick={() => onOpenTextSettings('link')}
               >

@@ -327,6 +327,17 @@ export default function EmailBuilder({
   }, [html, locale]);
 
   useLayoutEffect(() => {
+    canvas.current
+      ?.querySelectorAll<HTMLElement>('[data-block-id]')
+      .forEach((cell) => {
+        cell.toggleAttribute(
+          'data-selected',
+          !columnsOpen && cell.dataset.blockId === selectedBlock?.id,
+        );
+      });
+  }, [html, locale, selectedBlock?.id, columnsOpen]);
+
+  useLayoutEffect(() => {
     const measure = () => {
       if (!surface.current || !canvas.current || !selection) return;
       const host = surface.current.getBoundingClientRect();
@@ -378,7 +389,9 @@ export default function EmailBuilder({
         ?.focus({ preventScroll: true });
     } else if (selectedBlock && selectedBlock.type !== 'text' && !columnsOpen)
       popover.current
-        ?.querySelector<HTMLElement>('textarea,input:not([type="file"])')
+        ?.querySelector<HTMLElement>(
+          'input[type="text"],input:not([type]),input[type="url"]',
+        )
         ?.focus();
   }, [selectedBlock?.id, columnsOpen, locale, textSettingsOpen]);
 
@@ -634,6 +647,7 @@ export default function EmailBuilder({
       <div
         ref={surface}
         className={e.surface}
+        data-manipulating={manipulating || undefined}
         onPointerDown={(event) => {
           if (event.target === event.currentTarget) {
             setSelection(null);
@@ -794,7 +808,7 @@ export default function EmailBuilder({
             style={{ top: insertion.top, left: insertion.left }}
           >
             <div className={e.popoverHead}>
-              <strong>Добавить блок здесь</strong>
+              <strong>Добавить блок</strong>
               <button
                 type="button"
                 aria-label="Закрыть выбор блока"
@@ -848,7 +862,7 @@ export default function EmailBuilder({
           <div className={e.popoverHead}>
             <strong>
               {columnsOpen
-                ? 'Секция'
+                ? `Секция ${document.sections.indexOf(target.section) + 1}`
                 : selectedBlock?.type === 'text'
                   ? textSettingsOpen === 'link'
                     ? 'Ссылка'
@@ -1004,6 +1018,12 @@ export default function EmailBuilder({
             </div>
           ) : (
             <>
+              <BlockFields
+                content={selectedContent!}
+                onChange={(value) =>
+                  updateContent(selectedBlock!.id, locale, value)
+                }
+              />
               {(selectedBlock?.type === 'image' ||
                 selectedBlock?.type === 'button') && (
                 <div
@@ -1115,12 +1135,6 @@ export default function EmailBuilder({
                   />
                 </div>
               )}
-              <BlockFields
-                content={selectedContent!}
-                onChange={(value) =>
-                  updateContent(selectedBlock!.id, locale, value)
-                }
-              />
             </>
           )}
         </div>

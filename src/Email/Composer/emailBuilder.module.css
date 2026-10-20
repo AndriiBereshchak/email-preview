@@ -293,16 +293,15 @@
 .sectionToolbar {
   flex-direction: column;
   top: 8px;
-  left: -30px;
-  opacity: 0.6;
+  right: -24px;
+  opacity: 0.7;
 }
-.sectionTools[data-block-selected] .sectionToolbar {
-  opacity: 0;
+.blockToolbar {
+  flex-direction: column;
 }
+.sectionTools[data-active] .sectionToolbar,
 .sectionToolbar:hover,
-.sectionToolbar:focus-within,
-.sectionTools[data-block-selected] .sectionToolbar:hover,
-.sectionTools[data-block-selected] .sectionToolbar:focus-within {
+.sectionToolbar:focus-within {
   opacity: 1;
 }
 .sectionToolbar button,
@@ -488,11 +487,6 @@
   background: #edf6f0;
   border-color: #68bb8a;
 }
-@media (hover: none) {
-  .canvas :global(.email-editor-insert) {
-    opacity: 0.65;
-  }
-}
 
 .empty:hover {
   background: #f6faf7;
@@ -535,6 +529,7 @@
   cursor: pointer;
 }
 .besideAdd {
+  opacity: 0;
   display: grid;
   place-items: center;
   width: 24px;
@@ -552,6 +547,7 @@
 }
 .besideArea:hover .besideAdd,
 .besideArea:focus-visible .besideAdd {
+  opacity: 1;
   background: #dcefe3;
   border-style: solid;
 }
@@ -644,4 +640,27 @@
 }
 .imageHint svg {
   flex-shrink: 0;
+}
+
+.settingsPanel > .fields {
+  margin-bottom: 16px;
+}
+
+@media (max-width: 760px), (hover: none), (pointer: coarse) {
+  .besideArea:not([data-active]),
+  .besideArea:not([data-active]) .besideAdd,
+  .canvas :global(.email-editor-insert) {
+    pointer-events: none;
+  }
+  .besideArea[data-active] .besideAdd,
+  .besideArea:focus-visible .besideAdd,
+  .canvas :global(tr:has(+ tr [data-selected]) .email-editor-insert),
+  .canvas :global(.email-editor-insert):focus-visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+.surface[data-manipulating] .besideAdd,
+.surface[data-manipulating] :global(.email-editor-insert) {
+  opacity: 0;
 }

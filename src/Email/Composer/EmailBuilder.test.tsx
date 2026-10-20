@@ -591,14 +591,14 @@ it('moves an image into its own side-add area from either the image or its drag 
   );
   const handle = page.getByRole('button', { name: 'Переместить блок' });
   fireEvent.dragStart(handle, {
-    clientX: initialLeft + 10,
+    clientX: initialLeft - 32,
     dataTransfer: transfer(),
   });
   const left = page.getByRole('button', {
     name: 'Добавить справа от картинки',
   });
   fireEvent.dragOver(left, {
-    clientX: initialLeft + 42,
+    clientX: initialLeft,
     clientY: 110,
     dataTransfer: transfer(),
   });
@@ -924,7 +924,9 @@ it('styles text as a colored heading and links a selected phrase without affecti
   range.selectNodeContents(updatedEditor);
   window.getSelection()!.removeAllRanges();
   window.getSelection()!.addRange(range);
-  fireEvent.click(page.getByRole('button', { name: 'Ссылка в тексте' }));
+  fireEvent.click(
+    page.getByRole('button', { name: 'Ссылка для выделенного текста' }),
+  );
   expect(page.queryByRole('combobox', { name: 'Вид текста' })).toBeNull();
   fireEvent.change(
     page.getByRole('textbox', { name: 'Адрес ссылки в тексте' }),
@@ -968,6 +970,13 @@ it('uses colored outline buttons and section borders from the existing settings'
       );
     });
   const filledSpacing = spacing(filled);
+  const textInput = page.getByRole('textbox', { name: 'Текст кнопки' });
+  expect(window.document.activeElement).toBe(textInput);
+  expect(
+    textInput.compareDocumentPosition(
+      page.getByRole('combobox', { name: 'Вид кнопки' }),
+    ) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
   fireEvent.change(page.getByRole('combobox', { name: 'Вид кнопки' }), {
     target: { value: 'outline' },
   });
@@ -1006,7 +1015,9 @@ it('keeps settings beside the canvas and uses one toolbar for the selected text'
   )!;
   fireEvent.click(editor);
   const settings = page.getByRole('button', { name: 'Настройки текста' });
-  const link = page.getByRole('button', { name: 'Ссылка в тексте' });
+  const link = page.getByRole('button', {
+    name: 'Ссылка для выделенного текста',
+  });
   const remove = page.getByRole('button', { name: 'Удалить блок текст' });
   expect(settings.parentElement).toBe(link.parentElement);
   expect(settings.parentElement).toBe(remove.parentElement);

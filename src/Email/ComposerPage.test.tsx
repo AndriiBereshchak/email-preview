@@ -380,11 +380,11 @@ it('removes deleted block content from every language after confirmation', async
   const page = setup();
   addUkrainian(page);
   fireEvent.click(page.getByRole('button', { name: 'Далее: оформление' }));
-  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
   fireEvent.click(page.getByRole('button', { name: 'Удалить блок текст' }));
   expect(inlineText(page)).toBeTruthy();
-  confirm.mockReturnValue(true);
+  fireEvent.click(page.getByRole('button', { name: 'Отмена' }));
   fireEvent.click(page.getByRole('button', { name: 'Удалить блок текст' }));
+  fireEvent.click(page.getByRole('button', { name: 'Удалить' }));
   expect(page.queryByRole('textbox', { name: 'Текст письма' })).toBeNull();
   fireEvent.click(page.getByRole('tab', { name: /Русский/ }));
   expect(page.queryByRole('textbox', { name: 'Текст письма' })).toBeNull();

@@ -678,3 +678,37 @@
 .canvas :global([data-block-id][draggable='true'] [data-email-text]) {
   pointer-events: none;
 }
+
+.removalText {
+  margin: 0;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.5;
+}
+.removalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 24px;
+}
+.removalActions button {
+  min-height: 44px;
+  padding: 10px 20px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: white;
+  color: var(--text);
+  font-weight: 700;
+  cursor: pointer;
+}
+.removalActions .removalConfirm {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: white;
+}
+@media (max-width: 480px) {
+  .removalActions button {
+    flex: 1;
+    padding-inline: 12px;
+  }
+}

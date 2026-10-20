@@ -51,6 +51,7 @@ import {
   X,
 } from 'lucide-react';
 import { Field } from '../Field';
+import CustomModal from '../../parts/CustomModal/CustomModal';
 import e from './emailBuilder.module.css';
 
 type ChangeDocument = Dispatch<SetStateAction<EmailDocument>>;
@@ -202,6 +203,11 @@ export default function EmailBuilder({
   } | null>(null);
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [manipulating, setManipulating] = useState(false);
+  const [removal, setRemoval] = useState<{
+    name: string;
+    contentName: string;
+    confirm: () => void;
+  } | null>(null);
   const [insertion, setInsertion] = useState<{
     columnId: string;
     beforeId?: string;
@@ -310,7 +316,7 @@ export default function EmailBuilder({
     if (!selection && !insertion && !columnsOpen) return;
     const dismiss = (event: PointerEvent) => {
       const node = event.target;
-      if (!(node instanceof Element)) return;
+      if (!(node instanceof Element) || node.closest('dialog')) return;
       const content = node
         .closest('[data-block-id]')
         ?.querySelector<HTMLElement>(
@@ -654,7 +660,12 @@ export default function EmailBuilder({
     editingText.current = node;
     updateContent(id, locale, readEmailText(node));
   };
-  const confirmRemoval = (ids: string[], name: string) => {
+  const confirmRemoval = (
+    ids: string[],
+    name: string,
+    contentName: string,
+    confirm: () => void,
+  ) => {
     const filled = Object.values(document.versions).some((version) =>
       ids.some((id) => {
         const content = version?.blocks[id];
@@ -666,26 +677,23 @@ export default function EmailBuilder({
         );
       }),
     );
-    return (
-      !filled ||
-      window.confirm(
-        `Удалить ${name} со всем содержимым во всех языковых версиях?`,
-      )
-    );
+    if (filled) setRemoval({ name, contentName, confirm });
+    else confirm();
   };
   const deleteSection = (id: string) => {
     const section = document.sections.find((section) => section.id === id)!;
     const ids = section.columns.flatMap((column) =>
       column.blocks.map((block) => block.id),
     );
-    if (!confirmRemoval(ids, 'эту секцию')) return;
-    closePanels();
-    setSelection(null);
-    onChange((current) => ({
-      ...current,
-      sections: current.sections.filter((section) => section.id !== id),
-      versions: removeContent(current, ids),
-    }));
+    confirmRemoval(ids, 'секцию', 'Секция и её содержимое', () => {
+      closePanels();
+      setSelection(null);
+      onChange((current) => ({
+        ...current,
+        sections: current.sections.filter((section) => section.id !== id),
+        versions: removeContent(current, ids),
+      }));
+    });
   };
   const deleteColumn = (id: string) => {
     const owner = document.sections.find((section) =>
@@ -693,33 +701,35 @@ export default function EmailBuilder({
     )!;
     const column = owner.columns.find((column) => column.id === id)!;
     const ids = column.blocks.map((block) => block.id);
-    if (!confirmRemoval(ids, 'эту колонку')) return;
-    setSelection({
-      columnId: owner.columns.find((column) => column.id !== id)!.id,
+    confirmRemoval(ids, 'колонку', 'Колонка и её содержимое', () => {
+      setSelection({
+        columnId: owner.columns.find((column) => column.id !== id)!.id,
+      });
+      onChange((current) => ({
+        ...current,
+        sections: current.sections.map((section) => ({
+          ...section,
+          columns: section.columns.filter((column) => column.id !== id),
+        })),
+        versions: removeContent(current, ids),
+      }));
     });
-    onChange((current) => ({
-      ...current,
-      sections: current.sections.map((section) => ({
-        ...section,
-        columns: section.columns.filter((column) => column.id !== id),
-      })),
-      versions: removeContent(current, ids),
-    }));
   };
   const deleteBlock = (id: string) => {
-    if (!confirmRemoval([id], 'этот блок')) return;
-    closeSettings();
-    onChange((current) => ({
-      ...current,
-      sections: current.sections.map((section) => ({
-        ...section,
-        columns: section.columns.map((column) => ({
-          ...column,
-          blocks: column.blocks.filter((block) => block.id !== id),
+    confirmRemoval([id], 'блок', 'Блок и его содержимое', () => {
+      closeSettings();
+      onChange((current) => ({
+        ...current,
+        sections: current.sections.map((section) => ({
+          ...section,
+          columns: section.columns.map((column) => ({
+            ...column,
+            blocks: column.blocks.filter((block) => block.id !== id),
+          })),
         })),
-      })),
-      versions: removeContent(current, [id]),
-    }));
+        versions: removeContent(current, [id]),
+      }));
+    });
   };
   return (
     <div
@@ -1246,6 +1256,33 @@ export default function EmailBuilder({
             </>
           )}
         </div>
+      )}
+      {removal && (
+        <CustomModal
+          isOpen
+          onClose={() => setRemoval(null)}
+          title={`Удалить ${removal.name}?`}
+          maxWidth="480px"
+        >
+          <p className={e.removalText}>
+            {removal.contentName} будут удалены во всех языковых версиях.
+          </p>
+          <div className={e.removalActions}>
+            <button type="button" onClick={() => setRemoval(null)}>
+              Отмена
+            </button>
+            <button
+              type="button"
+              className={e.removalConfirm}
+              onClick={() => {
+                removal.confirm();
+                setRemoval(null);
+              }}
+            >
+              Удалить
+            </button>
+          </div>
+        </CustomModal>
       )}
     </div>
   );

@@ -81,6 +81,12 @@ const rect = (left: number, top: number, width: number, height: number) =>
   }) as DOMRect;
 
 beforeEach(() => {
+  HTMLDialogElement.prototype.showModal = function () {
+    this.setAttribute('open', '');
+  };
+  HTMLDialogElement.prototype.close = function () {
+    this.removeAttribute('open');
+  };
   class Pointer extends MouseEvent {
     pointerId: number;
     constructor(type: string, init: PointerEventInit = {}) {
@@ -473,17 +479,18 @@ it('creates the first section from the empty-state action', () => {
 
 it('deletes the intended section from its own controls and removes its content in all languages', () => {
   const page = setup();
-  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
   fireEvent.click(page.getByRole('button', { name: 'Удалить секцию 1' }));
   expect(page.document().sections).toHaveLength(2);
-  confirm.mockReturnValue(true);
+  fireEvent.click(page.getByRole('button', { name: 'Отмена' }));
   fireEvent.click(page.getByRole('button', { name: 'Удалить секцию 1' }));
+  fireEvent.click(page.getByRole('button', { name: 'Удалить' }));
   expect(page.document().sections.map((section) => section.id)).toEqual([
     'second',
   ]);
   expect(Object.keys(page.document().versions.ru!.blocks)).toEqual(['c']);
   expect(page.document().versions.uk!.blocks).toEqual({});
   fireEvent.click(page.getByRole('button', { name: 'Удалить секцию 1' }));
+  fireEvent.click(page.getByRole('button', { name: 'Удалить' }));
   expect(page.document().sections).toEqual([]);
   expect(page.getByText('Добавьте первую секцию')).toBeTruthy();
 });
@@ -1398,4 +1405,22 @@ it('clears selection when clicking the empty part of the selected text cell', ()
     page.queryByRole('button', { name: 'Изменить ширину текста' }),
   ).toBeNull();
   expect(window.document.activeElement).not.toBe(editor);
+});
+
+it('keeps block content when dismissed and deletes it in every language only after confirmation', () => {
+  const page = setup();
+  const open = () =>
+    fireEvent.click(page.getByRole('button', { name: 'Удалить блок текст' }));
+  fireEvent.click(inlineText(page));
+  open();
+  const dialog = page.getByRole('dialog', { name: 'Удалить блок?' });
+  fireEvent(dialog, new Event('cancel', { cancelable: true }));
+  expect(page.document().versions.ru!.blocks.c).toBeTruthy();
+  open();
+  fireEvent.click(page.getByRole('button', { name: 'Закрыть' }));
+  expect(page.document().versions.ru!.blocks.c).toBeTruthy();
+  open();
+  fireEvent.click(page.getByRole('button', { name: 'Удалить' }));
+  expect(page.document().versions.ru!.blocks.c).toBeUndefined();
+  expect(page.document().sections[1].columns[0].blocks).toEqual([]);
 });

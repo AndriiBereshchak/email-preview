@@ -294,7 +294,7 @@
   flex-direction: column;
   top: 8px;
   right: -24px;
-  opacity: 0.7;
+  opacity: 0.35;
 }
 .blockToolbar {
   flex-direction: column;
@@ -647,6 +647,9 @@
 }
 
 @media (max-width: 760px), (hover: none), (pointer: coarse) {
+  .sectionToolbar {
+    opacity: 1;
+  }
   .besideArea:not([data-active]),
   .besideArea:not([data-active]) .besideAdd,
   .canvas :global(.email-editor-insert) {
@@ -663,4 +666,9 @@
 .surface[data-manipulating] .besideAdd,
 .surface[data-manipulating] :global(.email-editor-insert) {
   opacity: 0;
+}
+
+.blockToolbar button[aria-pressed='true'] {
+  background: #dcefe3;
+  color: #2e7a55;
 }

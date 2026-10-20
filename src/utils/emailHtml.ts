@@ -25,6 +25,7 @@ export function letterImageHtml(
   widthPercent = 100,
   alignment: 'left' | 'center' | 'right' = 'left',
   offsetPercent?: number,
+  maxWidth?: number,
 ): string {
   const width = Number.isFinite(widthPercent)
     ? Math.max(1, Math.min(100, widthPercent))
@@ -47,7 +48,7 @@ export function letterImageHtml(
         : imageAlignment === 'center'
           ? 'margin-left:auto;margin-right:auto;'
           : '';
-  return `<img src="${escapeHtml(image.url)}" alt="${escapeHtml(image.name)}"${fullWidth ? ` width="${width}%" align="${imageAlignment}"` : ''} style="${fullWidth ? `display:block;border:0;width:${width}%;${margin}` : ''}max-width:100%;height:auto;">`;
+  return `<img src="${escapeHtml(image.url)}" alt="${escapeHtml(image.name)}"${fullWidth ? ` width="${width}%" align="${imageAlignment}"` : ''} style="${fullWidth ? `display:block;border:0;width:${width}%;${margin}` : ''}max-width:${Number.isFinite(maxWidth) ? `${Math.max(1, maxWidth!)}px` : '100%'};height:auto;">`;
 }
 
 export function renderEmailHtml(

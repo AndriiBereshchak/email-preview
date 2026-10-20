@@ -6,6 +6,7 @@ export type EmailBlock = (
   | {
       id: string;
       type: 'text';
+      alignment?: EmailAlignment;
       color?: string;
       variant?: 'body' | 'heading';
     }
@@ -51,6 +52,7 @@ export type EmailBlockContent =
       type: 'text';
       text: string;
       links?: { start: number; end: number; href: string }[];
+      bold?: { start: number; end: number }[];
     }
   | { type: 'image'; src: string; alt: string }
   | { type: 'button'; text: string; href: string };

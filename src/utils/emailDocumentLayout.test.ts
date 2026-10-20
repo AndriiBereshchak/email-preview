@@ -213,3 +213,20 @@ it('exports button dimensions and uses row layout when a neighbor is added', () 
     'padding-left:12.5%',
   );
 });
+
+it('keeps a shared-row image within its desktop width when the row stacks on mobile', () => {
+  const document = placeEmailBlockBeside(
+    fixture(),
+    'col',
+    'image',
+    { id: 'copy', type: 'text' },
+    'right',
+    'row',
+  );
+  document.versions.ru!.blocks.copy = { type: 'text', text: 'Beside' };
+  const html = renderEmailDocument(document, 'ru').html;
+  const image = html.match(/<img[^>]+alt="Image"[^>]*>/)![0];
+  const maxWidth = Number(image.match(/max-width:([\d.]+)px/)![1]);
+  expect(maxWidth).toBeCloseTo((640 - 48 - 32 - 16) * 0.2 - 8);
+  expect(image).toContain('width:100%');
+});

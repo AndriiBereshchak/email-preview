@@ -28,7 +28,13 @@ import { backgroundImageStyle } from '../../utils/appearanceModel';
 import EmailCanvasControls from './EmailCanvasControls';
 import AppearanceColor from './AppearanceColor';
 import TextBlockSettings from './TextBlockSettings';
-import { readEmailText } from '../../utils/emailText';
+import {
+  emailTextHtml,
+  isEmailTextBold,
+  readEmailText,
+  selectEmailText,
+  toggleEmailTextBold,
+} from '../../utils/emailText';
 import AppearanceBackgroundImage from './AppearanceBackgroundImage';
 import {
   Image as ImageIcon,
@@ -285,7 +291,7 @@ export default function EmailBuilder({
         popover.current?.contains(node) ||
         insertionMenu.current?.contains(node) ||
         canvas.current?.contains(node) ||
-        node.closest(`.${e.canvasControls}`)
+        node.closest(`.${e.canvasControls}, .${e.addSection}`)
       )
         return;
       closePanels();
@@ -523,45 +529,70 @@ export default function EmailBuilder({
       };
     });
   };
+  const selectedText = (expandLink = false) => {
+    const editor = Array.from(
+      canvas.current?.querySelectorAll<HTMLElement>('[data-email-text]') ?? [],
+    ).find(
+      (node) =>
+        node.closest<HTMLElement>('[data-block-id]')?.dataset.blockId ===
+        selectedBlock?.id,
+    );
+    const selection = window.getSelection();
+    const range = selection?.rangeCount
+      ? selection.getRangeAt(0).cloneRange()
+      : null;
+    if (
+      !editor ||
+      !range ||
+      !editor.contains(range.startContainer) ||
+      !editor.contains(range.endContainer)
+    )
+      return null;
+    if (expandLink && range.collapsed) {
+      const startNode =
+        range.startContainer.nodeType === Node.ELEMENT_NODE
+          ? (range.startContainer as Element)
+          : range.startContainer.parentElement;
+      const anchor = startNode?.closest('a');
+      if (anchor && editor.contains(anchor)) range.selectNodeContents(anchor);
+    }
+    const prefix = range.cloneRange();
+    prefix.selectNodeContents(editor);
+    prefix.setEnd(range.startContainer, range.startOffset);
+    const start = readEmailText(prefix.cloneContents()).text.length;
+    return {
+      editor,
+      start,
+      end: start + readEmailText(range.cloneContents()).text.length,
+    };
+  };
+  const rememberTextSelection = () => {
+    const selection = selectedText();
+    setTextSelection(
+      selection ? { start: selection.start, end: selection.end } : null,
+    );
+  };
   const openTextSettings = (mode: 'style' | 'link') => {
     if (mode === 'link') {
-      const editor = Array.from(
-        canvas.current?.querySelectorAll<HTMLElement>('[data-email-text]') ??
-          [],
-      ).find(
-        (node) =>
-          node.closest<HTMLElement>('[data-block-id]')?.dataset.blockId ===
-          selectedBlock?.id,
+      const selection = selectedText(true);
+      setTextSelection(
+        selection ? { start: selection.start, end: selection.end } : null,
       );
-      const selection = window.getSelection();
-      const range = selection?.rangeCount
-        ? selection.getRangeAt(0).cloneRange()
-        : null;
-      if (
-        editor &&
-        range &&
-        editor.contains(range.startContainer) &&
-        editor.contains(range.endContainer)
-      ) {
-        const startNode =
-          range.startContainer.nodeType === Node.ELEMENT_NODE
-            ? (range.startContainer as Element)
-            : range.startContainer.parentElement;
-        const anchor = startNode?.closest('a');
-        if (range.collapsed && anchor && editor.contains(anchor))
-          range.selectNodeContents(anchor);
-        const prefix = range.cloneRange();
-        prefix.selectNodeContents(editor);
-        prefix.setEnd(range.startContainer, range.startOffset);
-        const start = readEmailText(prefix.cloneContents()).text.length;
-        setTextSelection({
-          start,
-          end: start + readEmailText(range.cloneContents()).text.length,
-        });
-      } else setTextSelection(null);
     }
     editingText.current = null;
     setTextSettingsOpen(mode);
+  };
+  const toggleBold = () => {
+    const selection = selectedText();
+    if (!selection || selection.start === selection.end || !selectedBlock)
+      return;
+    const { editor, start, end } = selection;
+    const content = toggleEmailTextBold(readEmailText(editor), { start, end });
+    editor.innerHTML = emailTextHtml(content, document.appearance.linkColor);
+    selectEmailText(editor, start, end);
+    editingText.current = editor;
+    setTextSelection({ start, end });
+    updateContent(selectedBlock.id, locale, content);
   };
 
   const updateInlineText = (node: HTMLElement) => {
@@ -693,6 +724,7 @@ export default function EmailBuilder({
                 );
                 if (node) editingText.current = node;
               }}
+              onSelect={rememberTextSelection}
               onInput={(event) => {
                 const node = (event.target as HTMLElement).closest<HTMLElement>(
                   '[data-email-text]',
@@ -763,6 +795,11 @@ export default function EmailBuilder({
           onDeleteSection={deleteSection}
           onDeleteBlock={deleteBlock}
           onOpenTextSettings={openTextSettings}
+          onToggleBold={toggleBold}
+          textBold={
+            selectedContent?.type === 'text' &&
+            isEmailTextBold(selectedContent, textSelection)
+          }
           onAddBeside={(
             columnId,
             anchorId,
@@ -1024,51 +1061,52 @@ export default function EmailBuilder({
                   updateContent(selectedBlock!.id, locale, value)
                 }
               />
-              {(selectedBlock?.type === 'image' ||
-                selectedBlock?.type === 'button') && (
-                <div
-                  className={e.imageAlignment}
-                  role="group"
-                  aria-label={
-                    selectedBlock.type === 'image'
-                      ? 'Расположение картинки'
-                      : 'Расположение кнопки'
-                  }
-                >
-                  {(['left', 'center', 'right'] as const).map(
-                    (alignment, index) => (
-                      <button
-                        type="button"
-                        key={alignment}
-                        aria-pressed={
-                          (selectedBlock.alignment ?? 'left') === alignment
-                        }
-                        onClick={() =>
-                          onChange((current) =>
-                            updateEmailBlock(
-                              current,
-                              selectedBlock.id,
-                              (block) =>
-                                block.type === 'image' ||
-                                block.type === 'button'
-                                  ? {
-                                      ...block,
-                                      alignment,
-                                      ...(block.type === 'image'
-                                        ? { offsetPercent: undefined }
-                                        : { insetPercent: undefined }),
-                                    }
-                                  : block,
-                            ),
-                          )
-                        }
-                      >
-                        {['Слева', 'По центру', 'Справа'][index]}
-                      </button>
-                    ),
-                  )}
-                </div>
-              )}
+              {selectedBlock &&
+                (selectedBlock.type !== 'text' ||
+                  textSettingsOpen === 'style') && (
+                  <div
+                    className={e.imageAlignment}
+                    role="group"
+                    aria-label={
+                      selectedBlock.type === 'image'
+                        ? 'Расположение картинки'
+                        : selectedBlock.type === 'button'
+                          ? 'Расположение кнопки'
+                          : 'Выравнивание текста'
+                    }
+                  >
+                    {(['left', 'center', 'right'] as const).map(
+                      (alignment, index) => (
+                        <button
+                          type="button"
+                          key={alignment}
+                          aria-pressed={
+                            (selectedBlock.alignment ?? 'left') === alignment
+                          }
+                          onClick={() =>
+                            onChange((current) =>
+                              updateEmailBlock(
+                                current,
+                                selectedBlock.id,
+                                (block) => ({
+                                  ...block,
+                                  alignment,
+                                  ...(block.type === 'image'
+                                    ? { offsetPercent: undefined }
+                                    : block.type === 'button'
+                                      ? { insetPercent: undefined }
+                                      : {}),
+                                }),
+                              ),
+                            )
+                          }
+                        >
+                          {['Слева', 'По центру', 'Справа'][index]}
+                        </button>
+                      ),
+                    )}
+                  </div>
+                )}
               {selectedBlock?.type === 'text' &&
                 selectedContent?.type === 'text' && (
                   <TextBlockSettings

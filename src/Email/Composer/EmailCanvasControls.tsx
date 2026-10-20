@@ -17,7 +17,13 @@ import {
   updateEmailBlock,
 } from '../../utils/emailDocumentLayout';
 import e from './emailBuilder.module.css';
-import { GripVertical, Link2, SlidersHorizontal, Trash2 } from 'lucide-react';
+import {
+  Bold,
+  GripVertical,
+  Link2,
+  SlidersHorizontal,
+  Trash2,
+} from 'lucide-react';
 
 type Box = {
   image?: boolean;
@@ -96,6 +102,8 @@ export default function EmailCanvasControls({
   onDeleteSection,
   onDeleteBlock,
   onOpenTextSettings,
+  onToggleBold,
+  textBold,
   onAddBeside,
 }: {
   document: EmailDocument;
@@ -111,6 +119,8 @@ export default function EmailCanvasControls({
   onDeleteSection: (id: string) => void;
   onDeleteBlock: (id: string) => void;
   onOpenTextSettings: (mode: 'style' | 'link') => void;
+  onToggleBold: () => void;
+  textBold: boolean;
   onAddBeside: (
     columnId: string,
     anchorId: string,
@@ -632,7 +642,10 @@ export default function EmailCanvasControls({
         <div
           key={box.id}
           className={e.sectionTools}
-          data-active={box.id === activeSection?.id || undefined}
+          data-active={
+            (settingsOpen && !blockId && box.id === activeSection?.id) ||
+            undefined
+          }
           style={{ top: box.top - 8, left: box.left, width: box.width }}
         >
           <div
@@ -882,16 +895,28 @@ export default function EmailCanvasControls({
               />
             </button>
             {selectedBlock.type === 'text' && (
-              <button
-                type="button"
-                className={e.textLink}
-                aria-label="Ссылка для выделенного текста"
-                title="Ссылка для выделенного текста"
-                onPointerDown={(event) => event.preventDefault()}
-                onClick={() => onOpenTextSettings('link')}
-              >
-                <Link2 size={16} strokeWidth={1.7} aria-hidden="true" />
-              </button>
+              <>
+                <button
+                  type="button"
+                  aria-label="Жирный текст"
+                  title="Жирный текст для выделенных слов"
+                  aria-pressed={textBold}
+                  onPointerDown={(event) => event.preventDefault()}
+                  onClick={onToggleBold}
+                >
+                  <Bold size={16} strokeWidth={1.7} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  className={e.textLink}
+                  aria-label="Ссылка для выделенного текста"
+                  title="Ссылка для выделенного текста"
+                  onPointerDown={(event) => event.preventDefault()}
+                  onClick={() => onOpenTextSettings('link')}
+                >
+                  <Link2 size={16} strokeWidth={1.7} aria-hidden="true" />
+                </button>
+              </>
             )}
             <button
               type="button"

@@ -39,6 +39,7 @@ export function renderEmailDocumentContent(
     block: EmailBlock,
     section: EmailSection,
     inline = false,
+    imageMaxWidth?: number,
   ): string => {
     const content: EmailBlockContent | undefined = Object.hasOwn(
       version.blocks,
@@ -49,8 +50,7 @@ export function renderEmailDocumentContent(
         ? emptyEmailBlockContent(block.type)
         : undefined;
     if (!content || content.type !== block.type) return '';
-    const alignment =
-      block.type === 'text' ? 'left' : (block.alignment ?? 'left');
+    const alignment = block.alignment ?? 'left';
     let html = '';
 
     if (block.type === 'text' && content.type === 'text') {
@@ -66,7 +66,7 @@ export function renderEmailDocumentContent(
       const editable = options.editor
         ? ' data-email-text contenteditable="plaintext-only" tabindex="0" role="textbox" aria-label="Текст письма" aria-multiline="true" data-placeholder="Напишите текст письма…"'
         : '';
-      html = `<${tag}${editable} style="margin:0;color:${appearanceColor(block.color, appearanceColor(section.textColor, a.textColor))};${style}${width}">${emailTextHtml(content, a.linkColor)}</${tag}>`;
+      html = `<${tag}${editable} style="margin:0;color:${appearanceColor(block.color, appearanceColor(section.textColor, a.textColor))};text-align:${alignment};${style}${width}">${emailTextHtml(content, a.linkColor)}</${tag}>`;
       plain.push(content.text);
     } else if (block.type === 'image' && content.type === 'image') {
       const src = emailImageUrl(content.src);
@@ -78,6 +78,7 @@ export function renderEmailDocumentContent(
             inline ? 100 : block.widthPercent,
             inline ? 'left' : alignment,
             inline ? undefined : block.offsetPercent,
+            imageMaxWidth,
           )
         : '<span class="email-editor-placeholder">Нажмите, чтобы загрузить картинку</span>';
       if (content.alt) plain.push(content.alt);
@@ -159,10 +160,13 @@ export function renderEmailDocumentContent(
               0,
             );
             const cells = row
-              .map(
-                (block) =>
-                  `<td class="email-inline-cell" width="${(((block.widthPercent ?? 1) / total) * 100).toFixed(4)}%" valign="top" style="vertical-align:top;padding:0 4px;width:${(((block.widthPercent ?? 1) / total) * 100).toFixed(4)}%;">${table(renderBlock(block, section, true), 'table-layout:fixed;')}</td>`,
-              )
+              .map((block) => {
+                const blockShare = (block.widthPercent ?? 1) / total;
+                const imageWidth = options.editor
+                  ? undefined
+                  : Math.max(1, (width - 16) * blockShare - 8);
+                return `<td class="email-inline-cell" width="${(blockShare * 100).toFixed(4)}%" valign="top" style="vertical-align:top;padding:0 4px;width:${(blockShare * 100).toFixed(4)}%;">${table(renderBlock(block, section, true, imageWidth), 'table-layout:fixed;')}</td>`;
+              })
               .join('');
             return (
               insert +

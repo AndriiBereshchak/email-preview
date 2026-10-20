@@ -1033,3 +1033,89 @@ it('keeps settings beside the canvas and uses one toolbar for the selected text'
   fireEvent.click(page.getByRole('button', { name: 'Закрыть настройки' }));
   expect(page.queryByRole('dialog')).toBeNull();
 });
+
+it.each(['image', 'button', 'section'] as const)(
+  'adds a section on the first click while %s settings are open',
+  (type) => {
+    const initial = fixture();
+    if (type === 'button') {
+      initial.sections[0].columns[0].blocks[1] = { id: 'picture', type };
+      initial.versions.ru!.blocks.picture = { type, text: 'Далее', href: '' };
+    }
+    const page = setup(initial);
+    fireEvent.click(
+      page.getByRole('button', {
+        name:
+          type === 'section'
+            ? 'Настройки секции 1'
+            : `Редактировать ${type === 'image' ? 'картинку' : 'кнопку'}`,
+      }),
+    );
+    const dialog = page.getByRole('dialog');
+    const add = page.getByRole('button', { name: '+ Добавить секцию' });
+    fireEvent.pointerDown(add);
+    expect(page.getByRole('dialog')).toBe(dialog);
+    fireEvent.click(add);
+    expect(page.document().sections).toHaveLength(3);
+    expect(page.queryByRole('dialog')).toBeNull();
+  },
+);
+
+it('toggles a selected bold phrase, preserves it while editing, and aligns only its text block', () => {
+  const page = setup();
+  const editor = page.container.querySelector<HTMLElement>(
+    '[data-block-id="a"] [data-email-text]',
+  )!;
+  fireEvent.click(editor);
+  const range = document.createRange();
+  range.setStart(editor.firstChild!, 0);
+  range.setEnd(editor.firstChild!, 3);
+  window.getSelection()!.removeAllRanges();
+  window.getSelection()!.addRange(range);
+  const bold = page.getByRole('button', { name: 'Жирный текст' });
+  const toggle = () => {
+    fireEvent.pointerDown(bold);
+    fireEvent.click(bold);
+  };
+  toggle();
+  expect(editor.querySelector('strong')?.textContent).toBe('Пер');
+  expect(window.getSelection()!.toString()).toBe('Пер');
+  expect(bold.getAttribute('aria-pressed')).toBe('true');
+  expect(page.document().versions.ru!.blocks.a).toMatchObject({
+    bold: [{ start: 0, end: 3 }],
+  });
+  expect(page.document().versions.uk!.blocks.a).not.toHaveProperty('bold');
+  toggle();
+  expect(editor.querySelector('strong')).toBeNull();
+  toggle();
+  editor.prepend(document.createTextNode('До '));
+  fireEvent.input(editor);
+  expect(page.document().versions.ru!.blocks.a).toMatchObject({
+    bold: [{ start: 3, end: 6 }],
+  });
+  fireEvent.click(page.getByRole('button', { name: 'Настройки текста' }));
+  for (const [label, alignment] of [
+    ['По центру', 'center'],
+    ['Справа', 'right'],
+    ['Слева', 'left'],
+  ]) {
+    fireEvent.click(
+      page
+        .getByRole('group', { name: 'Выравнивание текста' })
+        .querySelectorAll('button')[
+        ['Слева', 'По центру', 'Справа'].indexOf(label)
+      ],
+    );
+    expect(page.document().sections[0].columns[0].blocks[0]).toMatchObject({
+      alignment,
+    });
+    const updated = page.container.querySelector<HTMLElement>(
+      '[data-block-id="a"] [data-email-text]',
+    )!;
+    expect(updated.style.textAlign).toBe(alignment);
+    expect(updated.querySelector('strong')?.textContent).toBe('Пер');
+  }
+  expect(page.document().sections[0].columns[0].blocks[2]).not.toHaveProperty(
+    'alignment',
+  );
+});

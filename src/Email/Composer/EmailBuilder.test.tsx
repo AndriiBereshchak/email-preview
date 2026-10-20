@@ -1151,3 +1151,251 @@ it('coalesces resize moves per frame and flushes the last move before pointer re
   act(() => frame(16));
   expect(width()).toBe(1);
 });
+
+it('adds third and further blocks at filled row boundaries without changing translations', () => {
+  const initial = fixture();
+  const row = initial.sections[0].columns[0].blocks;
+  row[0] = { ...row[0], rowId: 'filled', widthPercent: 50 };
+  row[1] = { ...row[1], rowId: 'filled', widthPercent: 50 };
+  const page = setup(initial);
+  const versions = page.document().versions;
+  const insert = (anchor: string, type: string) => {
+    fireEvent.click(
+      page.container.querySelector(`[data-block-id="${anchor}"]`)!,
+    );
+    fireEvent.click(page.getByRole('button', { name: 'Добавить блок в ряд' }));
+    fireEvent.click(page.getByRole('button', { name: type }));
+  };
+  const blocks = () => page.document().sections[0].columns[0].blocks;
+  insert('a', 'Текст');
+  expect(blocks().map((block) => block.type)).toEqual([
+    'text',
+    'text',
+    'image',
+    'text',
+  ]);
+  expect(blocks()[2].id).toBe('picture');
+  insert('a', 'Кнопка');
+  expect(blocks()[1].type).toBe('button');
+  insert('picture', 'Картинка');
+  const filled = blocks().filter((block) => block.rowId === 'filled');
+  expect(filled).toHaveLength(5);
+  expect(filled[4].type).toBe('image');
+  expect(
+    filled.reduce((sum, block) => sum + block.widthPercent!, 0),
+  ).toBeCloseTo(100);
+  expect(page.document().versions).toBe(versions);
+  expect(
+    page.container.querySelector(
+      '[data-beside-anchor="picture"][data-side="left"]',
+    ),
+  ).toBeNull();
+  expect(
+    page.queryAllByRole('button', { name: 'Добавить справа от кнопки' }),
+  ).toHaveLength(1);
+  expect(
+    page.getAllByRole('button', { name: 'Добавить блок в ряд' }),
+  ).toHaveLength(1);
+});
+
+it.each(['text', 'image', 'button'] as const)(
+  'shrinks a right-hand %s inside its cell without resizing its neighbor',
+  (type) => {
+    const initial = fixture();
+    initial.sections[0].columns[0].blocks = [
+      { id: 'a', type: 'text', rowId: 'pair', widthPercent: 50 },
+      { id: 'right-block', type, rowId: 'pair', widthPercent: 50 },
+    ];
+    initial.versions.ru!.blocks['right-block'] =
+      type === 'text'
+        ? { type: 'text', text: 'Right text' }
+        : type === 'image'
+          ? {
+              type: 'image',
+              src: 'https://example.test/banner.png',
+              alt: 'Image',
+            }
+          : { type: 'button', text: 'Long button text', href: '' };
+    const page = setup(initial);
+    const before = page.document().sections[0].columns[0].blocks;
+    const versions = page.document().versions;
+    fireEvent.click(
+      page.container.querySelector('[data-block-id="right-block"]')!,
+    );
+    const handle = page.getByRole('button', {
+      name:
+        type === 'text'
+          ? 'Изменить ширину текста'
+          : type === 'image'
+            ? 'Изменить размер картинки'
+            : 'Изменить размер кнопки',
+    });
+    fireEvent.pointerDown(handle, {
+      pointerId: 1,
+      button: 0,
+      clientX: 400,
+      clientY: 100,
+    });
+    fireEvent.pointerMove(handle, { pointerId: 1, clientX: 334, clientY: 100 });
+    fireEvent.pointerUp(handle, { pointerId: 1 });
+    const blocks = page.document().sections[0].columns[0].blocks;
+    expect(blocks[0]).toBe(before[0]);
+    expect(blocks.map((block) => block.widthPercent)).toEqual([50, 50]);
+    if (blocks[1].type === 'button') expect(blocks[1].buttonWidth).toBe(48);
+    else expect(blocks[1].contentWidthPercent).toBeCloseTo(75);
+    expect(page.document().versions).toBe(versions);
+    fireEvent.pointerDown(handle, {
+      pointerId: 2,
+      button: 0,
+      clientX: 400,
+      clientY: 100,
+    });
+    fireEvent.pointerMove(handle, { pointerId: 2, clientX: 450, clientY: 100 });
+    fireEvent.pointerCancel(handle, { pointerId: 2 });
+    expect(page.document().sections[0].columns[0].blocks).toEqual(blocks);
+  },
+);
+
+it('drags a text block directly while preserving text editing and horizontal placement', () => {
+  const initial = fixture();
+  initial.sections[0].columns[0].blocks[0].widthPercent = 50;
+  const page = setup(initial);
+  const cell = () =>
+    page.container.querySelector<HTMLElement>('[data-block-id="a"]')!;
+  const editor = () => cell().querySelector<HTMLElement>('[data-email-text]')!;
+  const versions = page.document().versions;
+  expect(cell().draggable).toBe(true);
+  fireEvent.dragStart(cell(), {
+    clientX: 200,
+    clientY: 60,
+    dataTransfer: transfer(),
+  });
+  fireEvent.dragOver(cell(), {
+    clientX: 240,
+    clientY: 50,
+    dataTransfer: transfer(),
+  });
+  fireEvent.drop(cell(), { dataTransfer: transfer() });
+  const block = page.document().sections[0].columns[0].blocks[0];
+  expect(block.type).toBe('text');
+  if (block.type === 'text') expect(block.offsetPercent).toBeGreaterThan(0);
+  expect(editor().style.marginLeft).not.toBe('');
+  expect(page.document().versions).toBe(versions);
+  fireEvent.focus(editor());
+  fireEvent.click(editor());
+  expect(cell().draggable).toBe(false);
+  fireEvent.blur(editor());
+  expect(cell().draggable).toBe(true);
+});
+
+it('uses actual text bounds for drag previews and ignores the empty part of its cell', () => {
+  const initial = fixture();
+  initial.sections[0].columns[0].blocks[0].widthPercent = 40;
+  const page = setup(initial);
+  const cell = page.container.querySelector<HTMLElement>(
+    '[data-block-id="a"]',
+  )!;
+  const editor = cell.querySelector<HTMLElement>('[data-email-text]')!;
+  const preview = vi.fn();
+  const dataTransfer = { ...transfer(), setDragImage: preview };
+  const bounds = editor.getBoundingClientRect();
+  const before = page.document();
+  expect(
+    fireEvent.dragStart(cell, {
+      clientX: bounds.right + 20,
+      clientY: bounds.top + 10,
+      dataTransfer,
+    }),
+  ).toBe(false);
+  expect(preview).not.toHaveBeenCalled();
+  fireEvent.dragOver(cell, {
+    clientX: bounds.right + 40,
+    clientY: bounds.top + 10,
+    dataTransfer,
+  });
+  fireEvent.drop(cell, { dataTransfer });
+  expect(page.document()).toBe(before);
+  fireEvent.dragStart(cell, {
+    clientX: bounds.left + 10,
+    clientY: bounds.top + 10,
+    dataTransfer,
+  });
+  expect(preview).toHaveBeenCalledWith(editor, 10, 10);
+});
+
+it('shows one side insertion point in the free space of a narrowed row block', () => {
+  const initial = fixture();
+  initial.sections[0].columns[0].blocks = [
+    {
+      id: 'a',
+      type: 'text',
+      rowId: 'pair',
+      widthPercent: 50,
+      contentWidthPercent: 40,
+    },
+    { id: 'picture', type: 'image', rowId: 'pair', widthPercent: 50 },
+  ];
+  const page = setup(initial);
+  const points = () => page.container.querySelectorAll('[data-beside-anchor]');
+  expect(points()).toHaveLength(1);
+  const point = page.getByRole('button', { name: 'Добавить справа от текста' });
+  expect(point.getAttribute('data-active')).toBeNull();
+  fireEvent.click(page.container.querySelector('[data-block-id="a"]')!);
+  expect(point.getAttribute('data-active')).not.toBeNull();
+  const versions = page.document().versions;
+  fireEvent.click(point);
+  fireEvent.click(page.getByRole('button', { name: 'Текст' }));
+  const row = page.document().sections[0].columns[0].blocks;
+  expect(row).toHaveLength(3);
+  expect(row[1].type).toBe('text');
+  expect(row.every((block) => block.rowId === 'pair')).toBe(true);
+  expect(page.document().versions).toBe(versions);
+});
+
+it('dismisses a selected text block on outside clicks but preserves its toolbar and settings', () => {
+  const page = setup();
+  const editor = page.container.querySelector<HTMLElement>(
+    '[data-block-id="a"] [data-email-text]',
+  )!;
+  fireEvent.click(editor);
+  editor.focus();
+  const toolbar = page.getByRole('group', { name: 'Текст' });
+  fireEvent.pointerDown(toolbar);
+  expect(
+    page.queryByRole('button', { name: 'Изменить ширину текста' }),
+  ).not.toBeNull();
+  fireEvent.click(page.getByRole('button', { name: 'Настройки текста' }));
+  const panel = page.getByRole('dialog', { name: 'Оформление текста' });
+  fireEvent.pointerDown(panel);
+  expect(
+    page.queryByRole('dialog', { name: 'Оформление текста' }),
+  ).not.toBeNull();
+  fireEvent.pointerDown(page.getByRole('region', { name: 'Секция 1' }));
+  expect(
+    page.queryByRole('button', { name: 'Изменить ширину текста' }),
+  ).toBeNull();
+  expect(page.queryByRole('dialog', { name: 'Оформление текста' })).toBeNull();
+  expect(window.document.activeElement).not.toBe(editor);
+  fireEvent.click(page.container.querySelector('[data-block-id="a"]')!);
+  fireEvent.pointerDown(window.document.body);
+  expect(page.queryByRole('group', { name: 'Текст' })).toBeNull();
+});
+
+it('clears selection when clicking the empty part of the selected text cell', () => {
+  const initial = fixture();
+  initial.sections[0].columns[0].blocks[0].widthPercent = 40;
+  const page = setup(initial);
+  const cell = page.container.querySelector<HTMLElement>(
+    '[data-block-id="a"]',
+  )!;
+  const editor = cell.querySelector<HTMLElement>('[data-email-text]')!;
+  fireEvent.click(editor);
+  const bounds = editor.getBoundingClientRect();
+  const point = { clientX: bounds.right + 20, clientY: bounds.top + 10 };
+  fireEvent.pointerDown(cell, point);
+  fireEvent.click(cell, { ...point, detail: 1 });
+  expect(
+    page.queryByRole('button', { name: 'Изменить ширину текста' }),
+  ).toBeNull();
+  expect(window.document.activeElement).not.toBe(editor);
+});

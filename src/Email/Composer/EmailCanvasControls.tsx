@@ -18,6 +18,7 @@ import {
   moveEmailSection,
   emailBlockRows,
   placeEmailBlockBeside,
+  type EmailBlockFreeSpace,
   resizeEmailBlockWidth,
   updateEmailBlock,
 } from '../../utils/emailDocumentLayout';
@@ -26,6 +27,7 @@ import {
   Bold,
   GripVertical,
   Link2,
+  Plus,
   SlidersHorizontal,
   Trash2,
 } from 'lucide-react';
@@ -132,6 +134,7 @@ export default function EmailCanvasControls({
     side: 'left' | 'right',
     button: HTMLButtonElement,
     anchorWidthPercent?: number,
+    freeSpace?: EmailBlockFreeSpace,
   ) => void;
 }) {
   const [boxes, setBoxes] = useState<{
@@ -244,20 +247,38 @@ export default function EmailCanvasControls({
     const startBlock = (event: DragEvent) => {
       if (!(event.target instanceof HTMLElement)) return;
       const element = event.target.closest<HTMLElement>(
-        'img, [data-email-button]',
+        'img, [data-email-button], [data-block-id][draggable="true"]:has([data-email-text])',
       );
       if (!element) return;
       const cell = element.closest<HTMLElement>('[data-block-id]');
       const column = cell?.closest<HTMLElement>('[data-column-id]');
       if (!cell || !column || !canvas.current?.contains(cell)) return;
+      const source =
+        element.querySelector<HTMLElement>('[data-email-text]') ?? element;
+      const bounds = source.getBoundingClientRect();
+      if (
+        source.hasAttribute('data-email-text') &&
+        (event.clientX < bounds.left ||
+          event.clientX > bounds.right ||
+          event.clientY < bounds.top ||
+          event.clientY > bounds.bottom)
+      ) {
+        event.preventDefault();
+        return;
+      }
       dragged.current = {
         type: 'block',
         id: cell.dataset.blockId!,
-        grabX: event.clientX - element.getBoundingClientRect().left,
+        grabX: event.clientX - bounds.left,
       };
       if (event.dataTransfer) {
         event.dataTransfer.effectAllowed = 'move';
         event.dataTransfer.setData('text/plain', cell.dataset.blockId!);
+        event.dataTransfer.setDragImage?.(
+          source,
+          event.clientX - bounds.left,
+          event.clientY - bounds.top,
+        );
       }
       // Selecting here would open settings and steal focus during native dragging.
       onInteractionChange(true);
@@ -373,7 +394,29 @@ export default function EmailCanvasControls({
           const group = emailBlockRows(targetColumn.blocks).find((row) =>
             row.some((block) => block.id === box?.id),
           );
-          if (rowNode && group && group.length > 1) {
+          if (!insertion && box?.id === moving.id && movingBlock) {
+            const bounds = rowNode ? cell!.getBoundingClientRect() : null;
+            const left = bounds
+              ? bounds.left - origin.left
+              : columnBox.left + 8;
+            const width = bounds ? bounds.width : columnBox.width - 16;
+            const spare = Math.max(0, width - box.width);
+            const desired =
+              event.clientX -
+              origin.left -
+              left -
+              (moving.grabX ?? box.width / 2);
+            const offset = spare
+              ? Math.max(0, Math.min(100, (desired / spare) * 100))
+              : 0;
+            destination.horizontalOffset = Math.round(offset * 10) / 10;
+            if (movingBlock.type === 'button')
+              destination.buttonInset =
+                Math.round(((spare * offset) / Math.max(1, width)) * 10) / 10;
+            destination.left = left + (spare * offset) / 100;
+            destination.width = box.width;
+            destination.top = box.top + box.height;
+          } else if (rowNode && group && group.length > 1) {
             const bounds = rowNode.getBoundingClientRect();
             const afterRow = event.clientY >= bounds.top + bounds.height / 2;
             const lastIndex = targetColumn.blocks.indexOf(group.at(-1)!);
@@ -382,40 +425,19 @@ export default function EmailCanvasControls({
               : group[0].id;
             destination.top =
               bounds.top - origin.top + (afterRow ? bounds.height : 0);
-            if (!insertion && group.some((block) => block.id === moving.id)) {
-              if (box?.id === moving.id) destination.beforeId = moving.id;
-              else if (box) {
-                destination.beside = {
-                  anchorId: box.id,
-                  side:
-                    event.clientX - origin.left < box.left + box.width / 2
-                      ? 'left'
-                      : 'right',
-                };
-              }
+            if (
+              !insertion &&
+              box &&
+              group.some((block) => block.id === moving.id)
+            ) {
+              destination.beside = {
+                anchorId: box.id,
+                side:
+                  event.clientX - origin.left < box.left + box.width / 2
+                    ? 'left'
+                    : 'right',
+              };
             }
-          } else if (
-            box?.id === moving.id &&
-            (movingBlock?.type === 'image' || movingBlock?.type === 'button')
-          ) {
-            const spare = Math.max(0, columnBox.width - 16 - box.width);
-            const desired =
-              event.clientX -
-              origin.left -
-              columnBox.left -
-              8 -
-              (moving.grabX ?? box.width / 2);
-            const offset = spare
-              ? Math.max(0, Math.min(100, (desired / spare) * 100))
-              : 0;
-            destination.horizontalOffset = Math.round(offset * 10) / 10;
-            if (movingBlock.type === 'button')
-              destination.buttonInset =
-                Math.round(
-                  ((spare * offset) / Math.max(1, columnBox.width - 16)) * 10,
-                ) / 10;
-            destination.left = columnBox.left + 8 + (spare * offset) / 100;
-            destination.width = box.width;
           }
         }
       }
@@ -455,22 +477,20 @@ export default function EmailCanvasControls({
           });
         } else if (destination.horizontalOffset !== undefined) {
           onChange((current) =>
-            updateEmailBlock(current, destination.id, (block) =>
-              block.type === 'image' || block.type === 'button'
-                ? {
-                    ...block,
-                    alignment:
-                      destination.horizontalOffset === 0
-                        ? 'left'
-                        : destination.horizontalOffset === 100
-                          ? 'right'
-                          : 'center',
-                    ...(block.type === 'image'
-                      ? { offsetPercent: destination.horizontalOffset }
-                      : { insetPercent: destination.buttonInset }),
-                  }
-                : block,
-            ),
+            updateEmailBlock(current, destination.id, (block) => ({
+              ...block,
+              alignment:
+                block.type === 'text'
+                  ? block.alignment
+                  : destination.horizontalOffset === 0
+                    ? 'left'
+                    : destination.horizontalOffset === 100
+                      ? 'right'
+                      : 'center',
+              ...(block.type === 'button'
+                ? { insetPercent: destination.buttonInset }
+                : { offsetPercent: destination.horizontalOffset }),
+            })),
           );
         } else {
           onChange((current) =>
@@ -792,46 +812,52 @@ export default function EmailCanvasControls({
             const freeRight = grouped
               ? box.cellLeft! + box.cellWidth!
               : columnBox.left + columnBox.width - 8;
-            return (['left', 'right'] as const).flatMap((side) => {
-              const space =
-                side === 'left'
-                  ? box.left - freeLeft
-                  : freeRight - box.left - box.width;
-              if (space < 48) return [];
-              return (
-                <button
-                  key={`${box.id}-${side}`}
-                  type="button"
-                  className={e.besideArea}
-                  style={{
-                    left: side === 'left' ? freeLeft : box.left + box.width,
-                    top: box.top,
-                    width: space,
-                    height: Math.max(24, box.height),
-                  }}
-                  data-beside-anchor={box.id}
-                  data-active={box.id === blockId || undefined}
-                  data-column-id={column.id}
-                  data-side={side}
-                  data-anchor-width={anchorWidthPercent}
-                  aria-label={`Добавить ${side === 'left' ? 'слева' : 'справа'} от ${box.button ? 'кнопки' : box.text ? 'текста' : 'картинки'}`}
-                  title={`Добавить блок ${side === 'left' ? 'слева' : 'справа'}`}
-                  onClick={(event) =>
-                    onAddBeside(
-                      column.id,
-                      box.id,
-                      side,
-                      event.currentTarget,
-                      anchorWidthPercent,
-                    )
-                  }
-                >
-                  <span className={e.besideAdd} aria-hidden="true">
-                    +
-                  </span>
-                </button>
-              );
-            });
+            const leftSpace = box.left - freeLeft;
+            const rightSpace = freeRight - box.left - box.width;
+            const side = rightSpace >= leftSpace ? 'right' : 'left';
+            const space = Math.max(leftSpace, rightSpace);
+            if (space < 48) return [];
+            return (
+              <button
+                key={`${box.id}-${side}`}
+                type="button"
+                className={e.besideArea}
+                style={{
+                  left: side === 'left' ? freeLeft : box.left + box.width,
+                  top: box.top,
+                  width: space,
+                  height: Math.max(24, box.height),
+                }}
+                data-beside-anchor={box.id}
+                data-active={box.id === blockId || undefined}
+                data-column-id={column.id}
+                data-side={side}
+                data-anchor-width={anchorWidthPercent}
+                aria-label={`Добавить ${side === 'left' ? 'слева' : 'справа'} от ${box.button ? 'кнопки' : box.text ? 'текста' : 'картинки'}`}
+                title={`Добавить блок ${side === 'left' ? 'слева' : 'справа'}`}
+                onClick={(event) =>
+                  onAddBeside(
+                    column.id,
+                    box.id,
+                    side,
+                    event.currentTarget,
+                    anchorWidthPercent,
+                    grouped
+                      ? {
+                          cellWidth: box.cellWidth! + 8,
+                          contentWidth: box.width,
+                          offset: leftSpace,
+                          freeWidth: space,
+                        }
+                      : undefined,
+                  )
+                }
+              >
+                <span className={e.besideAdd} aria-hidden="true">
+                  +
+                </span>
+              </button>
+            );
           })}
       {blockBox && selectedBlock && (
         <>
@@ -872,6 +898,13 @@ export default function EmailCanvasControls({
                 };
                 event.dataTransfer.effectAllowed = 'move';
                 event.dataTransfer.setData('text/plain', blockBox.id);
+                const cell = canvas.current?.querySelector<HTMLElement>(
+                  `[data-block-id="${blockBox.id}"]`,
+                );
+                const source = cell?.querySelector<HTMLElement>(
+                  'img, [data-email-button], [data-email-text]',
+                );
+                if (source) event.dataTransfer.setDragImage?.(source, 0, 0);
               }}
               onKeyDown={(event) => {
                 if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')
@@ -899,6 +932,23 @@ export default function EmailCanvasControls({
             >
               <GripVertical size={16} strokeWidth={1.7} aria-hidden="true" />
             </button>
+            {(blockLocations.get(selectedBlock.id)?.row.length ?? 0) > 1 && (
+              <button
+                type="button"
+                aria-label="Добавить блок в ряд"
+                title="Добавить блок слева или справа"
+                onClick={(event) =>
+                  onAddBeside(
+                    columnId!,
+                    selectedBlock.id,
+                    'right',
+                    event.currentTarget,
+                  )
+                }
+              >
+                <Plus size={16} strokeWidth={1.7} aria-hidden="true" />
+              </button>
+            )}
             <button
               type="button"
               className={e.textSettings}
@@ -973,14 +1023,7 @@ export default function EmailCanvasControls({
                     '[data-block-id]',
                   ),
                 ).find((node) => node.dataset.blockId === blockId)!;
-                const button = cell.querySelector<HTMLElement>(
-                  '[data-email-button]',
-                )!;
-                const style = window.getComputedStyle(button);
                 const cellStyle = window.getComputedStyle(cell);
-                const range = window.document.createRange();
-                range.selectNodeContents(button);
-                const textWidth = range.getBoundingClientRect().width;
                 const availableWidth =
                   cell.getBoundingClientRect().width -
                   parseFloat(cellStyle.paddingLeft || '0') -
@@ -992,12 +1035,7 @@ export default function EmailCanvasControls({
                   startX: event.clientX,
                   startY: event.clientY,
                   width: blockBox.width,
-                  minimumWidth:
-                    textWidth +
-                    parseFloat(style.paddingLeft) +
-                    parseFloat(style.paddingRight) +
-                    parseFloat(style.borderLeftWidth || '0') +
-                    parseFloat(style.borderRightWidth || '0'),
+                  minimumWidth: 48,
                   availableWidth,
                   paddingY: selectedBlock.paddingY ?? 12,
                   originalWidth: selectedBlock.buttonWidth,
@@ -1034,19 +1072,19 @@ export default function EmailCanvasControls({
                   ),
                 ).find((node) => node.dataset.blockId === blockId)!;
                 const row = cell.closest<HTMLElement>('[data-row-id]');
-                const width = (row ?? cell).getBoundingClientRect().width;
+                const width = cell.getBoundingClientRect().width;
                 if (!width) return;
                 capture(event, {
                   type: selectedBlock.type,
                   pointerId: event.pointerId,
                   id: blockId!,
                   startX: event.clientX,
-                  width: row
-                    ? (width * (selectedBlock.widthPercent ?? 100)) / 100
-                    : blockBox.width,
+                  width: blockBox.width,
                   height: blockBox.height,
                   startY: event.clientY,
-                  original: selectedBlock.widthPercent,
+                  original: row
+                    ? selectedBlock.contentWidthPercent
+                    : selectedBlock.widthPercent,
                   columnWidth: width,
                 });
               }}
@@ -1060,7 +1098,10 @@ export default function EmailCanvasControls({
                     1,
                     Math.min(
                       100,
-                      (selectedBlock.widthPercent ?? 100) +
+                      ((blockLocations.get(selectedBlock.id)?.row.length ?? 0) >
+                      1
+                        ? (selectedBlock.contentWidthPercent ?? 100)
+                        : (selectedBlock.widthPercent ?? 100)) +
                         (event.key === 'ArrowLeft' ? -2 : 2),
                     ),
                   ),

@@ -85,6 +85,13 @@ export function emailBlockRows(blocks: EmailBlock[]) {
   return rows;
 }
 
+export interface EmailBlockFreeSpace {
+  cellWidth: number;
+  contentWidth: number;
+  offset: number;
+  freeWidth: number;
+}
+
 export function placeEmailBlockBeside(
   document: EmailDocument,
   columnId: string,
@@ -93,6 +100,7 @@ export function placeEmailBlockBeside(
   side: 'left' | 'right',
   rowId: string,
   anchorWidthPercent?: number,
+  freeSpace?: EmailBlockFreeSpace,
 ): EmailDocument {
   if (block.id === anchorId) return document;
   const destination = document.sections
@@ -162,16 +170,56 @@ export function placeEmailBlockBeside(
         const candidates = row
           .map((item, index) => ({ item, index }))
           .filter(({ item }) => item.type !== 'image');
-        const donor = (
-          candidates.length
-            ? candidates
-            : row.map((item, index) => ({ item, index }))
-        ).reduce((largest, candidate) =>
-          widths[candidate.index] > widths[largest.index] ? candidate : largest,
-        ).index;
-        const newWidth = row.length === 1 ? 100 - widths[0] : widths[donor] / 2;
+        const available = row.length > 1 ? freeSpace : undefined;
+        const donor = available
+          ? anchorIndex
+          : (candidates.length
+              ? candidates
+              : row.map((item, index) => ({ item, index }))
+            ).reduce((largest, candidate) =>
+              widths[candidate.index] > widths[largest.index]
+                ? candidate
+                : largest,
+            ).index;
+        const newWidth = available
+          ? (widths[anchorIndex] * available.freeWidth) / available.cellWidth
+          : row.length === 1
+            ? 100 - widths[0]
+            : widths[donor] / 2;
+        // Inline cells have 4px of padding on each side.
+        const contentSpace = available
+          ? available.cellWidth - available.freeWidth - 8
+          : 0;
+        const offset = available
+          ? Math.max(
+              0,
+              available.offset - (side === 'left' ? available.freeWidth : 0),
+            )
+          : 0;
         const items = row.map((item, index) => ({
           ...item,
+          ...(row.length === 1
+            ? item.type === 'button'
+              ? { insetPercent: undefined }
+              : { offsetPercent: undefined }
+            : {}),
+          ...(available && index === anchorIndex
+            ? item.type === 'button'
+              ? {
+                  buttonWidth: available.contentWidth,
+                  insetPercent: (offset / contentSpace) * 100,
+                }
+              : {
+                  contentWidthPercent: Math.min(
+                    100,
+                    (available.contentWidth / contentSpace) * 100,
+                  ),
+                  offsetPercent:
+                    contentSpace > available.contentWidth
+                      ? (offset / (contentSpace - available.contentWidth)) * 100
+                      : 0,
+                }
+            : {}),
           rowId: groupId,
           widthPercent:
             row.length === 1 || index !== donor
@@ -180,6 +228,9 @@ export function placeEmailBlockBeside(
         }));
         items.splice(anchorIndex + (side === 'right' ? 1 : 0), 0, {
           ...block,
+          ...(block.type === 'button'
+            ? { insetPercent: undefined }
+            : { offsetPercent: undefined }),
           rowId: groupId,
           widthPercent: newWidth,
         });
@@ -213,31 +264,23 @@ export function resizeEmailBlockWidth(
           ),
         );
         if (!row) return column;
-        const minimum = Math.min(1, 50 / row.length);
         const width =
           widthPercent === undefined
             ? undefined
-            : Math.max(
-                minimum,
-                Math.min(100 - minimum * (row.length - 1), widthPercent),
-              );
-        const otherWidth = row.reduce(
-          (total, item) =>
-            total + (item.id === id ? 0 : (item.widthPercent ?? 1)),
-          0,
-        );
+            : Math.max(1, Math.min(100, widthPercent));
         return {
           ...column,
-          blocks: column.blocks.map((block) => {
-            if (block.id === id) return { ...block, widthPercent: width };
-            if (row.length > 1 && row.includes(block) && width !== undefined)
-              return {
-                ...block,
-                widthPercent:
-                  ((block.widthPercent ?? 1) / otherWidth) * (100 - width),
-              };
-            return block;
-          }),
+          blocks: column.blocks.map((block) =>
+            block.id === id
+              ? row.length > 1
+                ? { ...block, contentWidthPercent: width }
+                : {
+                    ...block,
+                    widthPercent: width,
+                    contentWidthPercent: undefined,
+                  }
+              : block,
+          ),
         };
       }),
     })),

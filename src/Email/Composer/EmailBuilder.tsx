@@ -6,6 +6,7 @@ import {
 } from '../../utils/emailDocument';
 import {
   placeEmailBlockBeside,
+  type EmailBlockFreeSpace,
   updateEmailBlock,
 } from '../../utils/emailDocumentLayout';
 import {
@@ -208,6 +209,7 @@ export default function EmailBuilder({
       anchorId: string;
       side: 'left' | 'right';
       anchorWidthPercent?: number;
+      freeSpace?: EmailBlockFreeSpace;
     };
     top: number;
     left: number;
@@ -305,38 +307,42 @@ export default function EmailBuilder({
   };
 
   useEffect(() => {
-    if (
-      !insertion &&
-      !columnsOpen &&
-      (!selectedBlock || (selectedBlock.type === 'text' && !textSettingsOpen))
-    )
-      return;
+    if (!selection && !insertion && !columnsOpen) return;
     const dismiss = (event: PointerEvent) => {
       const node = event.target;
+      if (!(node instanceof Element)) return;
+      const content = node
+        .closest('[data-block-id]')
+        ?.querySelector<HTMLElement>(
+          'img, [data-email-button], [data-email-text]',
+        );
+      const bounds = content?.getBoundingClientRect();
+      const insideBlock =
+        canvas.current?.contains(node) &&
+        (node.closest('img, [data-email-button], [data-email-text]') ||
+          (bounds &&
+            event.clientX >= bounds.left &&
+            event.clientX <= bounds.right &&
+            event.clientY >= bounds.top &&
+            event.clientY <= bounds.bottom));
       if (
-        !(node instanceof Element) ||
         popover.current?.contains(node) ||
         insertionMenu.current?.contains(node) ||
-        canvas.current?.contains(node) ||
+        insideBlock ||
         node.closest(`.${e.canvasControls}, .${e.addSection}`)
       )
         return;
       closePanels();
-      setSelection((current) =>
-        current ? { columnId: current.columnId } : null,
-      );
+      setSelection(null);
+      setTextSelection(null);
+      const active = window.document.activeElement;
+      if (active instanceof HTMLElement && canvas.current?.contains(active))
+        active.blur();
     };
     window.document.addEventListener('pointerdown', dismiss, true);
     return () =>
       window.document.removeEventListener('pointerdown', dismiss, true);
-  }, [
-    insertion,
-    columnsOpen,
-    selectedBlock?.id,
-    selectedBlock?.type,
-    textSettingsOpen,
-    closePanels,
-  ]);
+  }, [insertion, columnsOpen, selection, closePanels]);
 
   useLayoutEffect(() => {
     const editingId =
@@ -463,6 +469,25 @@ export default function EmailBuilder({
     }
     setInsertion(null);
     const block = node.closest<HTMLElement>('[data-block-id]');
+    // Pointer clicks in the unused part of a row cell should not reselect its block.
+    if (block && 'clientX' in event && event.detail > 0) {
+      const content = block.querySelector<HTMLElement>(
+        'img, [data-email-button], [data-email-text]',
+      );
+      const bounds = content?.getBoundingClientRect();
+      if (
+        bounds &&
+        (event.clientX < bounds.left ||
+          event.clientX > bounds.right ||
+          event.clientY < bounds.top ||
+          event.clientY > bounds.bottom)
+      )
+        return;
+    }
+    if (!node.closest('[data-email-text]'))
+      block
+        ?.querySelector<HTMLElement>('[data-email-text]')
+        ?.focus({ preventScroll: true });
     setSelection({
       columnId: column.dataset.columnId!,
       blockId: block?.dataset.blockId,
@@ -512,6 +537,7 @@ export default function EmailBuilder({
             insertion.beside.side,
             crypto.randomUUID(),
             insertion.beside.anchorWidthPercent,
+            insertion.beside.freeSpace,
           )
         : {
             ...current,
@@ -706,12 +732,6 @@ export default function EmailBuilder({
         ref={surface}
         className={e.surface}
         data-manipulating={manipulating || undefined}
-        onPointerDown={(event) => {
-          if (event.target === event.currentTarget) {
-            setSelection(null);
-            closePanels();
-          }
-        }}
       >
         <div
           className={e.paper}
@@ -749,7 +769,11 @@ export default function EmailBuilder({
                 const node = (event.target as HTMLElement).closest<HTMLElement>(
                   '[data-email-text]',
                 );
-                if (node) editingText.current = node;
+                if (node) {
+                  editingText.current = node;
+                  node.closest<HTMLElement>('[data-block-id]')!.draggable =
+                    false;
+                }
               }}
               onSelect={rememberTextSelection}
               onInput={(event) => {
@@ -758,7 +782,13 @@ export default function EmailBuilder({
                 );
                 if (node) updateInlineText(node);
               }}
-              onBlur={() => {
+              onBlur={(event) => {
+                const node = (event.target as HTMLElement).closest<HTMLElement>(
+                  '[data-email-text]',
+                );
+                if (node)
+                  node.closest<HTMLElement>('[data-block-id]')!.draggable =
+                    true;
                 editingText.current = null;
               }}
               onPaste={(event) => {
@@ -833,6 +863,7 @@ export default function EmailBuilder({
             side,
             button,
             anchorWidthPercent,
+            freeSpace,
           ) => {
             if (!surface.current) return;
             const host = surface.current.getBoundingClientRect();
@@ -840,7 +871,7 @@ export default function EmailBuilder({
             insertionTrigger.current = button;
             setInsertion({
               columnId,
-              beside: { anchorId, side, anchorWidthPercent },
+              beside: { anchorId, side, anchorWidthPercent, freeSpace },
               top: rect.bottom - host.top + 8,
               left: Math.max(
                 0,

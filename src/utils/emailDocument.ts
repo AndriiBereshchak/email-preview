@@ -10,6 +10,7 @@ export type EmailBlock = (
       alignment?: EmailAlignment;
       color?: string;
       variant?: 'body' | 'heading';
+      offsetPercent?: number;
     }
   | {
       id: string;
@@ -31,6 +32,7 @@ export type EmailBlock = (
 ) & {
   rowId?: string;
   widthPercent?: number;
+  contentWidthPercent?: number;
 };
 
 export interface EmailColumn {

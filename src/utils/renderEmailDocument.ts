@@ -54,14 +54,17 @@ export function renderEmailDocumentContent(
         block.variant === 'heading'
           ? 'font-size:24px;line-height:1.3;font-weight:bold;'
           : '';
-      const width =
-        !inline && Number.isFinite(block.widthPercent)
-          ? `width:${Math.max(1, Math.min(100, block.widthPercent!))}%;`
-          : '';
+      const textWidth = inline ? block.contentWidthPercent : block.widthPercent;
+      const width = Number.isFinite(textWidth)
+        ? `width:${Math.max(1, Math.min(100, textWidth!))}%;`
+        : '';
+      const offset = Number.isFinite(block.offsetPercent)
+        ? `margin-left:${((100 - (textWidth ?? 100)) * Math.max(0, Math.min(100, block.offsetPercent!))) / 100}%;`
+        : '';
       const editable = options.editor
         ? ' data-email-text contenteditable="plaintext-only" tabindex="0" role="textbox" aria-label="Текст письма" aria-multiline="true" data-placeholder="Напишите текст письма…"'
         : '';
-      html = `<${tag}${editable} style="margin:0;color:${appearanceColor(block.color, appearanceColor(section.textColor, a.textColor))};text-align:${alignment};${style}${width}">${emailTextHtml(content, a.linkColor)}</${tag}>`;
+      html = `<${tag}${editable} style="margin:0;color:${appearanceColor(block.color, appearanceColor(section.textColor, a.textColor))};text-align:${alignment};${style}${width}${offset}">${emailTextHtml(content, a.linkColor)}</${tag}>`;
       plain.push(content.text);
     } else if (block.type === 'image' && content.type === 'image') {
       const src = emailImageUrl(content.src);
@@ -70,9 +73,9 @@ export function renderEmailDocumentContent(
         ? letterImageHtml(
             { url: src, name: content.alt },
             true,
-            inline ? 100 : block.widthPercent,
+            inline ? (block.contentWidthPercent ?? 100) : block.widthPercent,
             inline ? 'left' : alignment,
-            inline ? undefined : block.offsetPercent,
+            block.offsetPercent,
             imageMaxWidth,
           )
         : '<span class="email-editor-placeholder">Нажмите, чтобы загрузить картинку</span>';
@@ -106,10 +109,10 @@ export function renderEmailDocumentContent(
       plain.push([content.text, href].filter(Boolean).join(' — '));
     }
     const editorAttributes = options.editor
-      ? ` data-block-id="${escapeHtml(block.id)}" role="button" tabindex="0" aria-label="${block.type === 'text' ? 'Редактировать текст' : block.type === 'image' ? 'Редактировать картинку' : 'Редактировать кнопку'}"`
+      ? ` data-block-id="${escapeHtml(block.id)}"${block.type === 'text' ? ' draggable="true"' : ''} role="button" tabindex="0" aria-label="${block.type === 'text' ? 'Редактировать текст' : block.type === 'image' ? 'Редактировать картинку' : 'Редактировать кнопку'}"`
       : '';
     const inset =
-      block.type === 'button' && !inline && Number.isFinite(block.insetPercent)
+      block.type === 'button' && Number.isFinite(block.insetPercent)
         ? Math.max(0, Math.min(99, block.insetPercent!))
         : 0;
     const position = inset ? `padding-left:${inset}%;text-align:left;` : '';
@@ -159,7 +162,12 @@ export function renderEmailDocumentContent(
                 const blockShare = (block.widthPercent ?? 1) / total;
                 const imageWidth = options.editor
                   ? undefined
-                  : Math.max(1, (width - 16) * blockShare - 8);
+                  : (Math.max(1, (width - 16) * blockShare - 8) *
+                      Math.max(
+                        1,
+                        Math.min(100, block.contentWidthPercent ?? 100),
+                      )) /
+                    100;
                 return `<td class="email-inline-cell" width="${(blockShare * 100).toFixed(4)}%" valign="top" style="vertical-align:top;padding:0 4px;width:${(blockShare * 100).toFixed(4)}%;">${table(renderBlock(block, section, true, imageWidth), 'table-layout:fixed;')}</td>`;
               })
               .join('');

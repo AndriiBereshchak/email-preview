@@ -509,11 +509,13 @@
   padding: 4px;
 }
 .canvas :global([data-block-id]):has(img):hover,
-.canvas :global([data-block-id]):has([data-email-button]):hover {
+.canvas :global([data-block-id]):has([data-email-button]):hover,
+.canvas :global([data-block-id]):has([data-email-text]):hover {
   outline: none;
 }
 .canvas :global([data-block-id]) img:hover,
-.canvas :global([data-email-button]):hover {
+.canvas :global([data-email-button]):hover,
+.canvas :global([data-block-id]):hover :global([data-email-text]) {
   outline: 1px solid #68bb8a70;
   outline-offset: 2px;
 }
@@ -671,4 +673,8 @@
 .blockToolbar button[aria-pressed='true'] {
   background: #dcefe3;
   color: #2e7a55;
+}
+
+.canvas :global([data-block-id][draggable='true'] [data-email-text]) {
+  pointer-events: none;
 }

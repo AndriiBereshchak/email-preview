@@ -949,30 +949,6 @@ export default function EmailCanvasControls({
                 <Plus size={16} strokeWidth={1.7} aria-hidden="true" />
               </button>
             )}
-            <button
-              type="button"
-              className={e.textSettings}
-              aria-label={
-                selectedBlock.type === 'text'
-                  ? 'Настройки текста'
-                  : selectedBlock.type === 'image'
-                    ? 'Настройки картинки'
-                    : 'Настройки кнопки'
-              }
-              title="Настройки блока"
-              onPointerDown={(event) => event.preventDefault()}
-              onClick={() =>
-                selectedBlock.type === 'text'
-                  ? onOpenTextSettings('style')
-                  : onSelect(columnId!, selectedBlock.id)
-              }
-            >
-              <SlidersHorizontal
-                size={16}
-                strokeWidth={1.7}
-                aria-hidden="true"
-              />
-            </button>
             {selectedBlock.type === 'text' && (
               <>
                 <button

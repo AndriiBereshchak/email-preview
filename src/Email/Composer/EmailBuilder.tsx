@@ -274,10 +274,7 @@ export default function EmailBuilder({
     baseContent?.type === 'image' &&
     !!baseContent.src;
   const settingsVisible = Boolean(
-    !insertion &&
-    target &&
-    (columnsOpen ||
-      (selectedBlock && (selectedBlock.type !== 'text' || textSettingsOpen))),
+    !manipulating && !insertion && target && (columnsOpen || selectedBlock),
   );
   const updateSection = (changes: Partial<EmailSection>) => {
     if (!target) return;
@@ -432,12 +429,7 @@ export default function EmailBuilder({
       cell
         ?.querySelector<HTMLElement>('[data-email-text]')
         ?.focus({ preventScroll: true });
-    } else if (selectedBlock && selectedBlock.type !== 'text' && !columnsOpen)
-      popover.current
-        ?.querySelector<HTMLElement>(
-          'input[type="text"],input:not([type]),input[type="url"]',
-        )
-        ?.focus();
+    }
   }, [selectedBlock?.id, columnsOpen, locale, textSettingsOpen]);
 
   useEffect(() => {
@@ -733,7 +725,8 @@ export default function EmailBuilder({
   };
   return (
     <div
-      className={`${e.builder} ${settingsVisible ? e.withSettings : ''}`}
+      className={e.builder}
+      data-email-builder
       onKeyDown={(event) => {
         if (event.key === 'Escape') closeSettings();
       }}
@@ -741,6 +734,11 @@ export default function EmailBuilder({
       <div
         ref={surface}
         className={e.surface}
+        data-email-surface
+        style={{
+          backgroundColor: document.appearance.pageBackground,
+          ...backgroundImageStyle(document.appearance.pageBackgroundImage),
+        }}
         data-manipulating={manipulating || undefined}
       >
         <div
@@ -776,6 +774,19 @@ export default function EmailBuilder({
               onClick={selectFromCanvas}
               onKeyDown={selectFromCanvas}
               onFocus={(event) => {
+                const focused = event.target as HTMLElement;
+                const block = focused.closest<HTMLElement>('[data-block-id]');
+                const column = focused.closest<HTMLElement>('[data-column-id]');
+                if (block && column) {
+                  setSelection({
+                    columnId: column.dataset.columnId!,
+                    blockId: block.dataset.blockId,
+                  });
+                  setColumnsOpen(false);
+                  setInsertion(null);
+                  if (block.dataset.blockId !== selectedBlock?.id)
+                    setTextSettingsOpen(null);
+                }
                 const node = (event.target as HTMLElement).closest<HTMLElement>(
                   '[data-email-text]',
                 );
@@ -953,6 +964,7 @@ export default function EmailBuilder({
         <div
           ref={popover}
           className={e.settingsPanel}
+          data-email-settings
           role="dialog"
           aria-label={
             columnsOpen
@@ -964,7 +976,7 @@ export default function EmailBuilder({
                 : `Настройки блока ${labels[selectedBlock!.type].toLowerCase()}`
           }
         >
-          <div className={e.popoverHead}>
+          <div className={e.settingsLegend}>
             <strong>
               {columnsOpen
                 ? `Секция ${document.sections.indexOf(target.section) + 1}`
@@ -974,13 +986,6 @@ export default function EmailBuilder({
                     : 'Оформление текста'
                   : labels[selectedBlock!.type]}
             </strong>
-            <button
-              type="button"
-              aria-label="Закрыть настройки"
-              onClick={closeSettings}
-            >
-              <X size={16} strokeWidth={1.7} aria-hidden="true" />
-            </button>
           </div>
           {columnsOpen ? (
             <div className={e.columnSettings} key={target.section.id}>
@@ -1143,7 +1148,7 @@ export default function EmailBuilder({
               />
               {selectedBlock &&
                 (selectedBlock.type !== 'text' ||
-                  textSettingsOpen === 'style') && (
+                  textSettingsOpen !== 'link') && (
                   <div
                     className={e.imageAlignment}
                     role="group"
@@ -1163,7 +1168,8 @@ export default function EmailBuilder({
                           aria-pressed={
                             (selectedBlock.alignment ?? 'left') === alignment
                           }
-                          onClick={() =>
+                          onClick={() => {
+                            editingText.current = null;
                             onChange((current) =>
                               updateEmailBlock(
                                 current,
@@ -1178,8 +1184,8 @@ export default function EmailBuilder({
                                       : {}),
                                 }),
                               ),
-                            )
-                          }
+                            );
+                          }}
                         >
                           {['Слева', 'По центру', 'Справа'][index]}
                         </button>
@@ -1198,15 +1204,16 @@ export default function EmailBuilder({
                     textColor={
                       target.section.textColor ?? document.appearance.textColor
                     }
-                    onStyle={(changes) =>
+                    onStyle={(changes) => {
+                      editingText.current = null;
                       onChange((current) =>
                         updateEmailBlock(current, selectedBlock.id, (block) =>
                           block.type === 'text'
                             ? { ...block, ...changes }
                             : block,
                         ),
-                      )
-                    }
+                      );
+                    }}
                     onContent={(content) =>
                       updateContent(selectedBlock.id, locale, content)
                     }
@@ -1256,6 +1263,19 @@ export default function EmailBuilder({
             </>
           )}
         </div>
+      )}
+      {!settingsVisible && (
+        <aside
+          role="complementary"
+          className={`${e.settingsPanel} ${e.settingsEmpty}`}
+          data-email-settings
+          aria-label="Настройки редактора"
+        >
+          <div className={e.settingsLegend}>
+            <strong>Настройки</strong>
+          </div>
+          <p>Выберите блок или секцию, чтобы изменить их настройки.</p>
+        </aside>
       )}
       {removal && (
         <CustomModal

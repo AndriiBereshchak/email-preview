@@ -21,8 +21,12 @@ export default function AppearanceSettings({
   ) => onChange({ ...value, [key]: next });
   return (
     <div className={e.appearanceSettings}>
-      <fieldset>
-        <legend>Цвета и фон</legend>
+      <section
+        className={e.appearanceGroup}
+        role="group"
+        aria-label="Цвета и фон"
+      >
+        <h4 className={e.appearanceTitle}>Цвета и фон</h4>
         <div className={e.appearanceBackground}>
           <AppearanceColor
             label="Вокруг письма"
@@ -60,9 +64,13 @@ export default function AppearanceSettings({
           <Info size={14} strokeWidth={1.7} aria-hidden="true" />
           PNG, JPG, GIF, WebP · до 15 МБ
         </p>
-      </fieldset>
-      <fieldset>
-        <legend>Текст и ссылки</legend>
+      </section>
+      <section
+        className={e.appearanceGroup}
+        role="group"
+        aria-label="Текст и ссылки"
+      >
+        <h4 className={e.appearanceTitle}>Текст и ссылки</h4>
         <AppearanceColor
           label="Текст"
           icon={<Type size={16} strokeWidth={1.7} aria-hidden="true" />}
@@ -75,7 +83,7 @@ export default function AppearanceSettings({
           value={value.linkColor}
           onChange={(next) => set('linkColor', next)}
         />
-      </fieldset>
+      </section>
       <button
         type="button"
         className={`${e.linkBtn} ${e.appearanceReset}`}

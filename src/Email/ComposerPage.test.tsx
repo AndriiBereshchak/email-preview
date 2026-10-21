@@ -339,7 +339,7 @@ it('opens the constructor without body text and keeps shared layout with indepen
   fireEvent.click(page.getByText('Колонки', { exact: true }));
   fireEvent.click(page.getByRole('button', { name: '+ Колонка справа' }));
   fireEvent.click(page.getByRole('button', { name: '+ Колонка справа' }));
-  fireEvent.click(page.getByRole('button', { name: 'Закрыть настройки' }));
+  fireEvent.pointerDown(window.document.body);
   const section = within(page.getByRole('region', { name: 'Секция 1' }));
   expect(section.getAllByRole('group', { name: /^Колонка/ })).toHaveLength(3);
   fireEvent.click(
@@ -549,4 +549,34 @@ it('shares primary images, preserves translated replacements and restores inheri
   expect(
     page.getByTitle('Предпросмотр письма').getAttribute('srcdoc'),
   ).not.toContain('Привет!');
+});
+
+it('mounts mobile preview only after its HTML and images are ready', async () => {
+  const image = await import('../utils/appearanceImage');
+  const src = 'data:image/png;base64,aGVsbG8=';
+  vi.spyOn(image, 'readAppearanceImage').mockResolvedValue(src);
+  const page = setup();
+  fireEvent.click(page.getByRole('button', { name: 'Далее: оформление' }));
+  addBlockAtEnd(page, 'Картинка');
+  fireEvent.change(page.getByLabelText('Картинка для блока'), {
+    target: {
+      files: [new File(['image'], 'offer.png', { type: 'image/png' })],
+    },
+  });
+  await page.findByRole('textbox', { name: 'Описание картинки' });
+  let complete!: () => void;
+  vi.spyOn(image, 'embedEmailImages').mockImplementation(
+    (html) =>
+      new Promise((resolve) => {
+        complete = () => resolve(html);
+      }),
+  );
+  fireEvent.click(page.getByRole('tab', { name: 'На телефоне' }));
+  expect(page.queryByTitle('Письмо на телефоне')).toBeNull();
+  expect(page.getByRole('status').textContent).toContain('Подготовка');
+  await act(async () => complete());
+  const frame = page.getByTitle('Письмо на телефоне');
+  expect(frame.getAttribute('srcdoc')).toContain(src);
+  expect(frame.getAttribute('srcdoc')).toContain('Привет!');
+  expect(page.queryByRole('status')).toBeNull();
 });

@@ -767,7 +767,7 @@ it('keeps the editable node while typing and pastes plain text at the caret', ()
     type: 'text',
     text: 'Перший',
   });
-  expect(page.queryByRole('dialog')).toBeNull();
+  expect(page.getByRole('dialog', { name: 'Оформление текста' })).toBeTruthy();
 });
 
 it.each(['image', 'button'] as const)(
@@ -804,7 +804,9 @@ it.each(['image', 'button'] as const)(
     })[0];
     fireEvent.pointerDown(text);
     fireEvent.click(text);
-    expect(page.queryByRole('dialog')).toBeNull();
+    expect(
+      page.getByRole('dialog', { name: 'Оформление текста' }),
+    ).toBeTruthy();
     expect(window.document.activeElement?.hasAttribute('data-email-text')).toBe(
       true,
     );
@@ -846,7 +848,7 @@ it('sets a section background with editable text above it and removes only the i
   fireEvent.click(page.getByRole('button', { name: 'Убрать изображение' }));
   expect(page.document().sections[0].backgroundImage).toBe('');
   expect(page.document().versions).toBe(versions);
-  fireEvent.click(page.getByRole('button', { name: 'Закрыть настройки' }));
+  fireEvent.pointerDown(window.document.body);
   const editor = page.container.querySelector<HTMLElement>(
     '[data-block-id="a"] [data-email-text]',
   )!;
@@ -913,7 +915,6 @@ it('styles text as a colored heading and links a selected phrase without affecti
   range.selectNodeContents(editor);
   window.getSelection()!.removeAllRanges();
   window.getSelection()!.addRange(range);
-  fireEvent.click(page.getByRole('button', { name: 'Настройки текста' }));
   fireEvent.change(page.getByRole('combobox', { name: 'Вид текста' }), {
     target: { value: 'heading' },
   });
@@ -923,7 +924,7 @@ it('styles text as a colored heading and links a selected phrase without affecti
   expect(
     page.queryByRole('textbox', { name: 'Адрес ссылки в тексте' }),
   ).toBeNull();
-  fireEvent.click(page.getByRole('button', { name: 'Закрыть настройки' }));
+  fireEvent.pointerDown(window.document.body);
   const updatedEditor = page.container.querySelector(
     '[data-block-id="a"] [data-email-text]',
   )!;
@@ -978,7 +979,7 @@ it('uses colored outline buttons and section borders from the existing settings'
     });
   const filledSpacing = spacing(filled);
   const textInput = page.getByRole('textbox', { name: 'Текст кнопки' });
-  expect(window.document.activeElement).toBe(textInput);
+  expect(window.document.activeElement).not.toBe(textInput);
   expect(
     textInput.compareDocumentPosition(
       page.getByRole('combobox', { name: 'Вид кнопки' }),
@@ -1021,23 +1022,16 @@ it('keeps settings beside the canvas and uses one toolbar for the selected text'
     '[data-block-id="a"] [data-email-text]',
   )!;
   fireEvent.click(editor);
-  const settings = page.getByRole('button', { name: 'Настройки текста' });
-  const link = page.getByRole('button', {
-    name: 'Ссылка для выделенного текста',
-  });
-  const remove = page.getByRole('button', { name: 'Удалить блок текст' });
-  expect(settings.parentElement).toBe(link.parentElement);
-  expect(settings.parentElement).toBe(remove.parentElement);
-  fireEvent.click(settings);
+  expect(page.queryByRole('button', { name: 'Настройки текста' })).toBeNull();
   const panel = page.getByRole('dialog', { name: 'Оформление текста' });
   expect(panel.contains(editor)).toBe(false);
   expect(panel.previousElementSibling?.contains(editor)).toBe(true);
   fireEvent.pointerDown(editor);
   expect(page.getByRole('dialog', { name: 'Оформление текста' })).toBe(panel);
   fireEvent.click(editor);
-  expect(page.queryByRole('dialog')).toBeNull();
-  fireEvent.click(page.getByRole('button', { name: 'Настройки текста' }));
-  fireEvent.click(page.getByRole('button', { name: 'Закрыть настройки' }));
+  expect(page.getByRole('dialog', { name: 'Оформление текста' })).toBe(panel);
+  expect(page.queryByRole('button', { name: 'Закрыть настройки' })).toBeNull();
+  fireEvent.pointerDown(window.document.body);
   expect(page.queryByRole('dialog')).toBeNull();
 });
 
@@ -1100,7 +1094,6 @@ it('toggles a selected bold phrase, preserves it while editing, and aligns only 
   expect(page.document().versions.ru!.blocks.a).toMatchObject({
     bold: [{ start: 3, end: 6 }],
   });
-  fireEvent.click(page.getByRole('button', { name: 'Настройки текста' }));
   for (const [label, alignment] of [
     ['По центру', 'center'],
     ['Справа', 'right'],
@@ -1371,7 +1364,6 @@ it('dismisses a selected text block on outside clicks but preserves its toolbar 
   expect(
     page.queryByRole('button', { name: 'Изменить ширину текста' }),
   ).not.toBeNull();
-  fireEvent.click(page.getByRole('button', { name: 'Настройки текста' }));
   const panel = page.getByRole('dialog', { name: 'Оформление текста' });
   fireEvent.pointerDown(panel);
   expect(
@@ -1424,3 +1416,79 @@ it('keeps block content when dismissed and deletes it in every language only aft
   expect(page.document().versions.ru!.blocks.c).toBeUndefined();
   expect(page.document().sections[1].columns[0].blocks).toEqual([]);
 });
+
+it('keeps a settings placeholder when a block is deselected', () => {
+  const page = setup();
+  expect(
+    page.getByRole('complementary', { name: 'Настройки редактора' }),
+  ).toBeTruthy();
+  fireEvent.click(page.getByRole('button', { name: 'Редактировать картинку' }));
+  expect(
+    page.queryByRole('complementary', { name: 'Настройки редактора' }),
+  ).toBeNull();
+  expect(
+    page.getByRole('dialog', { name: 'Настройки блока картинка' }),
+  ).toBeTruthy();
+  fireEvent.pointerDown(window.document.body);
+  expect(
+    page.getByRole('complementary', { name: 'Настройки редактора' }),
+  ).toBeTruthy();
+  fireEvent.click(page.getByRole('button', { name: 'Настройки секции 1' }));
+  expect(page.getByRole('dialog', { name: 'Настройки секции' })).toBeTruthy();
+  fireEvent.pointerDown(window.document.body);
+  expect(
+    page.getByRole('complementary', { name: 'Настройки редактора' }),
+  ).toBeTruthy();
+});
+
+it.each(['text', 'image', 'button'] as const)(
+  'opens %s settings on keyboard focus without a toolbar settings button',
+  (type) => {
+    const initial = fixture();
+    initial.sections[0].columns[0].blocks = [{ id: 'a', type }];
+    initial.versions.ru!.blocks.a =
+      type === 'text'
+        ? { type, text: 'Текст' }
+        : type === 'image'
+          ? { type, src: '', alt: '' }
+          : { type, text: 'Кнопка', href: '' };
+    const page = setup(initial);
+    const block = page.container.querySelector<HTMLElement>(
+      '[data-block-id="a"]',
+    )!;
+    fireEvent.focus(block);
+    expect(
+      page.getByRole('dialog', {
+        name:
+          type === 'text'
+            ? 'Оформление текста'
+            : `Настройки блока ${type === 'image' ? 'картинка' : 'кнопка'}`,
+      }),
+    ).toBeTruthy();
+    expect(
+      page.queryByRole('button', {
+        name: /^Настройки (текста|картинки|кнопки)$/,
+      }),
+    ).toBeNull();
+  },
+);
+
+it.each(['image', 'button'] as const)(
+  'does not move focus into the %s settings after selecting a block',
+  (type) => {
+    const initial = fixture();
+    initial.sections[0].columns[0].blocks = [{ id: 'a', type }];
+    initial.versions.ru!.blocks.a =
+      type === 'image'
+        ? { type, src: '', alt: '' }
+        : { type, text: 'Кнопка', href: '' };
+    const page = setup(initial);
+    fireEvent.click(
+      page.getByRole('button', {
+        name: `Редактировать ${type === 'image' ? 'картинку' : 'кнопку'}`,
+      }),
+    );
+    const panel = page.getByRole('dialog');
+    expect(panel.contains(window.document.activeElement)).toBe(false);
+  },
+);

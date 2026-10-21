@@ -1558,11 +1558,23 @@ a.subject:hover {
   flex-direction: column;
   gap: 14px;
 }
-.designCanvas > .segmented {
-  align-self: flex-start;
+.designToolbar {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+@media (min-width: 1100px) {
+  .designToolbar {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
 }
 .designStage {
-  height: 720px;
+  height: auto;
   box-sizing: border-box;
   padding: 16px;
   border: 1px solid var(--border);
@@ -1574,7 +1586,7 @@ a.subject:hover {
   flex-direction: column;
   gap: 18px;
 }
-.appearanceSettings fieldset {
+.appearanceGroup {
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -1584,10 +1596,12 @@ a.subject:hover {
   padding: 16px;
   min-width: 0;
 }
-.appearanceSettings legend {
+.appearanceTitle {
+  margin: 0 0 4px;
   font-size: 13px;
+  line-height: 1.5;
   font-weight: 700;
-  padding: 0 4px;
+  color: var(--text);
 }
 .appearanceSettings .field {
   margin: 0;
@@ -1693,4 +1707,50 @@ a.subject:hover {
   object-fit: cover;
   border: 1px solid #dce2eb;
   border-radius: 8px;
+}
+
+.designStageBuilder {
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+}
+@media (max-width: 760px) {
+  .designStage {
+    height: auto;
+  }
+}
+
+@media (min-width: 761px) {
+  .designCanvasBuilder {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 256px;
+    align-items: start;
+    align-content: start;
+    column-gap: 24px;
+    row-gap: 14px;
+  }
+  .designCanvasBuilder > .designToolbar {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .designCanvasBuilder > .designStage {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .designCanvasBuilder .designStageBuilder,
+  .designBuilderHost,
+  .designCanvasBuilder [data-email-builder] {
+    display: contents;
+  }
+  .designCanvasBuilder [data-email-surface] {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .designCanvasBuilder [data-email-settings] {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: start;
+  }
 }

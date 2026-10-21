@@ -1,18 +1,17 @@
 .builder {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: start;
-  gap: 16px;
-  min-width: 0;
-}
-.withSettings {
   grid-template-columns: minmax(0, 1fr) 256px;
+  align-items: start;
+  gap: 24px;
+  min-width: 0;
 }
 .surface {
   position: relative;
   min-height: 340px;
   min-width: 0;
-  padding-bottom: 24px;
+  padding: 16px 16px 24px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
 }
 .paper {
   min-height: 260px;
@@ -117,14 +116,36 @@
   line-height: 1.5;
 }
 .settingsPanel {
-  position: sticky;
-  top: 16px;
+  margin: 0;
+  padding: 16px;
+  position: relative;
   width: auto;
   min-width: 0;
-  max-height: calc(100vh - 48px);
-  overflow-y: auto;
+  min-height: 0;
+  max-height: none;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow-y: visible;
   box-sizing: border-box;
   box-shadow: none;
+}
+.settingsLegend {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  margin-bottom: 18px;
+  padding: 0;
+  color: var(--text);
+  font-size: 13px;
+}
+.settingsEmpty {
+  color: var(--muted);
+}
+.settingsEmpty p {
+  margin: 0;
+  font-size: 13px;
 }
 .settingsPanel label[for],
 .settingsPanel label > span {
@@ -608,13 +629,19 @@
 }
 
 @media (max-width: 760px) {
-  .withSettings {
+  .builder {
     grid-template-columns: minmax(0, 1fr);
   }
+  .settingsEmpty {
+    display: none;
+  }
   .settingsPanel {
-    position: static;
+    position: relative;
+    top: auto;
     width: 100%;
-    max-height: 60vh;
+    min-height: 0;
+    max-height: none;
+    overflow-y: visible;
   }
 }
 

@@ -1,4 +1,10 @@
-import { useEffect, useState, type Dispatch, type SetStateAction } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from 'react';
 import { embedEmailImages } from '../../utils/appearanceImage';
 import { cx, languageName, type LetterLocale } from '../../utils/localModel';
 import {
@@ -22,6 +28,8 @@ interface Props {
 }
 export default function DesignStep(props: Props) {
   const [view, setView] = useState<'desktop' | 'mobile'>('desktop');
+  const [previewHeight, setPreviewHeight] = useState(340);
+  const stage = useRef<HTMLDivElement>(null);
   const appearance = props.document.appearance;
   const locales = Object.keys(props.document.versions) as LetterLocale[];
   const active = locales.includes(props.activeLocale)
@@ -40,54 +48,78 @@ export default function DesignStep(props: Props) {
       </div>
       <div className={e.designColumns}>
         <AppearanceSettings value={appearance} onChange={props.onAppearance} />
-        <div className={e.designCanvas}>
-          <div className={e.versions} role="tablist" aria-label="Язык макета">
-            {locales.map((locale) => (
-              <button
-                type="button"
-                key={locale}
-                role="tab"
-                aria-selected={locale === active}
-                className={cx(e.version, locale === active && e.versionActive)}
-                onClick={() => props.onActive(locale)}
-              >
-                {languageName(locale)}
-                {locale === props.defaultLocale && (
-                  <span className={e.badge}>основная</span>
-                )}
-              </button>
-            ))}
+        <div className={cx(e.designCanvas, e.designCanvasBuilder)}>
+          <div className={e.designToolbar}>
+            <div className={e.versions} role="tablist" aria-label="Язык макета">
+              {locales.map((locale) => (
+                <button
+                  type="button"
+                  key={locale}
+                  role="tab"
+                  aria-selected={locale === active}
+                  className={cx(
+                    e.version,
+                    locale === active && e.versionActive,
+                  )}
+                  onClick={() => props.onActive(locale)}
+                >
+                  {languageName(locale)}
+                  {locale === props.defaultLocale && (
+                    <span className={e.badge}>основная</span>
+                  )}
+                </button>
+              ))}
+            </div>
+            <div
+              className={e.segmented}
+              role="tablist"
+              aria-label="Размер макета"
+            >
+              {(['desktop', 'mobile'] as const).map((mode) => (
+                <button
+                  type="button"
+                  key={mode}
+                  role="tab"
+                  aria-selected={view === mode}
+                  className={cx(e.segment, view === mode && e.segmentActive)}
+                  onClick={() => {
+                    if (view === 'desktop' && mode === 'mobile') {
+                      const height = stage.current
+                        ?.querySelector<HTMLElement>('[data-email-surface]')
+                        ?.getBoundingClientRect().height;
+                      if (height) setPreviewHeight(height);
+                    }
+                    setView(mode);
+                  }}
+                >
+                  {mode === 'desktop' ? 'Редактор' : 'На телефоне'}
+                </button>
+              ))}
+            </div>
           </div>
           <div
-            className={e.segmented}
-            role="tablist"
-            aria-label="Размер макета"
-          >
-            {(['desktop', 'mobile'] as const).map((mode) => (
-              <button
-                type="button"
-                key={mode}
-                role="tab"
-                aria-selected={view === mode}
-                className={cx(e.segment, view === mode && e.segmentActive)}
-                onClick={() => setView(mode)}
-              >
-                {mode === 'desktop' ? 'Редактор' : 'На телефоне'}
-              </button>
-            ))}
-          </div>
-          <div
-            className={e.designStage}
+            ref={stage}
+            className={cx(
+              e.designStage,
+              view === 'desktop' && e.designStageBuilder,
+            )}
             role="region"
             aria-label="Макет письма"
-            style={{
-              backgroundColor: appearance.pageBackground,
-              ...backgroundImageStyle(appearance.pageBackgroundImage),
-            }}
+            style={
+              view === 'mobile'
+                ? {
+                    height: previewHeight,
+                    backgroundColor: appearance.pageBackground,
+                    ...backgroundImageStyle(appearance.pageBackgroundImage),
+                  }
+                : undefined
+            }
           >
             <div
+              className={view === 'desktop' ? e.designBuilderHost : undefined}
               style={{
                 width: view === 'mobile' ? 375 : '100%',
+                height: view === 'mobile' ? '100%' : undefined,
                 maxWidth: '100%',
                 margin: '0 auto',
               }}
@@ -147,6 +179,12 @@ function MobilePreview({
       cancelled = true;
     };
   }, [document, locale]);
+  if (!html)
+    return (
+      <p className={e.fieldHint} role="status">
+        Подготовка предпросмотра…
+      </p>
+    );
   return (
     <iframe
       title="Письмо на телефоне"
@@ -155,7 +193,8 @@ function MobilePreview({
       style={{
         width: 375,
         maxWidth: '100%',
-        height: 640,
+        height: '100%',
+        display: 'block',
         border: 0,
         background: 'white',
       }}
